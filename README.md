@@ -59,9 +59,14 @@ A free Apple ID is enough to run the app on your own device. Builds signed this
 way expire after 7 days and must be re-installed from Xcode.
 
 1. **Add your Apple ID** — Xcode ▸ Settings ▸ Accounts ▸ `+` ▸ Apple ID.
-2. **Find your team ID** — in that same Accounts pane, your personal team is
-   listed as "<Your Name> (Personal Team)". Click *Manage Certificates…* or see
-   the Team ID column; it is a 10-character string like `A1B2C3D4E5`.
+2. **Find your team ID** — Xcode's Accounts pane lists your personal team as
+   "<Your Name> (Personal Team)" but does not display its ID. First create a
+   signing certificate (Accounts ▸ *Manage Certificates…* ▸ `+` ▸ Apple
+   Development), then read the ID from the certificate's `OU` field:
+   ```sh
+   security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject
+   ```
+   It is a 10-character string like `A1B2C3D4E5`.
 3. **Generate the project with your team:**
    ```sh
    export DEVELOPMENT_TEAM=A1B2C3D4E5   # your ID from step 2
@@ -81,7 +86,8 @@ way expire after 7 days and must be re-installed from Xcode.
 ### Free-account limits
 
 - Builds stop launching after **7 days**; re-run from Xcode to renew.
-- Max 3 distinct apps signed at once, and 10 device registrations per week.
+- Max 3 apps installed per device at once, and at most 10 new App IDs
+  (bundle identifiers) per 7 days.
 - No TestFlight and no over-the-air install — those need the paid
   Apple Developer Program ($99/yr).
 - If the bundle identifier collides with an existing app, change
