@@ -84,6 +84,32 @@ struct CapturedRequestTests {
         #expect(result.first?.statusCode == 404)
     }
 
+    @Test("matching filters by source app and searches app names")
+    func matchingByApp() {
+        let courier = SampleData.Apps.courier
+        let frame = SampleData.Apps.frame
+        let entries = [
+            CapturedRequest(app: courier, method: .get, url: "https://a.example/1", statusCode: 200,
+                            durationSeconds: 0.1, requestBodySize: 0, responseBodySize: 1),
+            CapturedRequest(app: courier, method: .post, url: "https://a.example/2", statusCode: 500,
+                            durationSeconds: 0.1, requestBodySize: 0, responseBodySize: 1),
+            CapturedRequest(app: frame, method: .get, url: "https://b.example/1", statusCode: 200,
+                            durationSeconds: 0.1, requestBodySize: 0, responseBodySize: 1)
+        ]
+
+        #expect(entries.matching(query: "", app: courier).count == 2)
+        #expect(entries.matching(query: "", app: frame).count == 1)
+        #expect(entries.matching(query: "", statusClass: .serverError, app: courier).count == 1)
+        #expect(entries.matching(query: "", statusClass: .serverError, app: frame).isEmpty)
+        #expect(entries.matching(query: "cour").count == 2)
+        #expect(entries.matching(query: "FRAME").count == 1)
+    }
+
+    @Test("requests default to the unknown app")
+    func defaultApp() {
+        #expect(makeEntry().app == .unknown)
+    }
+
     @Test("sortedByRecency orders newest first")
     func sortedByRecency() {
         let older = makeEntry(timestamp: Date(timeIntervalSince1970: 0))

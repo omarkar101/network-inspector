@@ -5,12 +5,19 @@ A SwiftUI iOS app scaffold for browsing captured HTTP request/response traffic.
 The project is split in two:
 
 - **`NetworkInspectorKit`** — a Swift Package containing all of the real logic
-  (models, status-code classification, duration/byte-size formatting, and
-  search/filtering over a list of captured entries). It has no UIKit/SwiftUI
-  dependency, so it builds and its test suite runs on Linux as well as macOS.
+  (models, status-code classification, formatting, search/filtering, per-app
+  traffic aggregation and ranking, and a seeded live-traffic generator). It has
+  no UIKit/SwiftUI dependency, so it builds and its test suite runs on Linux as
+  well as macOS.
 - **`NetworkInspector`** — a thin SwiftUI app target (app lifecycle, views,
-  assets) that imports `NetworkInspectorKit` and renders a searchable list of
-  sample captured requests.
+  assets) that imports `NetworkInspectorKit`. It has two tabs:
+  - **Apps** — a live dashboard with totals (throughput, active apps, data,
+    error rate) and a ranked list of apps with sparklines. The list can be
+    sorted by live activity, requests, data, errors, latency or name, and
+    reorders as traffic arrives. Tap an app to see its requests.
+  - **Requests** — a searchable, status-filterable list of every request.
+
+  Traffic is simulated by `LiveTrafficGenerator` until real capture exists.
 
 ## Prerequisites
 

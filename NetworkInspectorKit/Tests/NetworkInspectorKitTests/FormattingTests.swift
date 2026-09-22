@@ -57,4 +57,47 @@ struct FormattingTests {
     func byteSizeInvalid() {
         #expect(Formatting.byteSize(-1) == "—")
     }
+
+    @Test(
+        "percent rounds to whole percentages",
+        arguments: [
+            (0.0, "0%"),
+            (0.001, "<1%"),
+            (0.005, "1%"),
+            (0.125, "13%"),
+            (0.5, "50%"),
+            (1.0, "100%")
+        ]
+    )
+    func percent(fraction: Double, expected: String) {
+        #expect(Formatting.percent(fraction) == expected)
+    }
+
+    @Test("percent rejects negative or non-finite values")
+    func percentInvalid() {
+        #expect(Formatting.percent(-0.1) == "—")
+        #expect(Formatting.percent(.nan) == "—")
+    }
+
+    @Test(
+        "rate shows one decimal below ten per minute",
+        arguments: [
+            (0.0, "0/min"),
+            (2.5, "2.5/min"),
+            (3.0, "3/min"),
+            (9.94, "9.9/min"),
+            (9.96, "10/min"),
+            (12.4, "12/min"),
+            (120.6, "121/min")
+        ]
+    )
+    func rate(perMinute: Double, expected: String) {
+        #expect(Formatting.rate(perMinute: perMinute) == expected)
+    }
+
+    @Test("rate rejects negative or non-finite values")
+    func rateInvalid() {
+        #expect(Formatting.rate(perMinute: -1) == "—")
+        #expect(Formatting.rate(perMinute: .infinity) == "—")
+    }
 }

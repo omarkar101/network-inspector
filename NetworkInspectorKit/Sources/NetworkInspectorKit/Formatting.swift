@@ -48,4 +48,30 @@ public enum Formatting {
         }
         return String(format: "%.1f %@", rounded, units[unitIndex])
     }
+
+    /// Formats a fraction in `0...1` as a percentage, e.g. "12%".
+    ///
+    /// Non-zero values that would round to 0 are shown as "<1%" so a rare
+    /// error never reads as none at all.
+    public static func percent(_ fraction: Double) -> String {
+        guard fraction.isFinite, fraction >= 0 else { return "—" }
+        let percent = (fraction * 100).rounded()
+        if percent == 0, fraction > 0 {
+            return "<1%"
+        }
+        return "\(Int(percent))%"
+    }
+
+    /// Formats a per-minute rate, e.g. "2.5/min" below 10 and "42/min" above.
+    public static func rate(perMinute value: Double) -> String {
+        guard value.isFinite, value >= 0 else { return "—" }
+        if value < 10 {
+            let tenths = (value * 10).rounded() / 10
+            if tenths == tenths.rounded() {
+                return "\(Int(tenths))/min"
+            }
+            return String(format: "%.1f/min", tenths)
+        }
+        return "\(Int(value.rounded()))/min"
+    }
 }

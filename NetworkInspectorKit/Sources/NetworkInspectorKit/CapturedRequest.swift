@@ -15,6 +15,8 @@ public enum HTTPMethod: String, Sendable, Hashable, CaseIterable {
 /// display in its list of traffic.
 public struct CapturedRequest: Sendable, Identifiable, Hashable {
     public let id: UUID
+    /// The app that issued the request.
+    public let app: SourceApp
     public let method: HTTPMethod
     public let url: String
     public let statusCode: Int
@@ -25,6 +27,7 @@ public struct CapturedRequest: Sendable, Identifiable, Hashable {
 
     public init(
         id: UUID = UUID(),
+        app: SourceApp = .unknown,
         method: HTTPMethod,
         url: String,
         statusCode: Int,
@@ -34,6 +37,7 @@ public struct CapturedRequest: Sendable, Identifiable, Hashable {
         timestamp: Date = Date()
     ) {
         self.id = id
+        self.app = app
         self.method = method
         self.url = url
         self.statusCode = statusCode
@@ -70,19 +74,27 @@ public struct CapturedRequest: Sendable, Identifiable, Hashable {
 }
 
 extension Sequence<CapturedRequest> {
-    /// Filters entries by a case-insensitive substring match against the URL
-    /// and HTTP method, and/or by status class. An empty query with a `nil`
-    /// class matches everything.
-    public func matching(query: String, statusClass: HTTPStatusClass? = nil) -> [CapturedRequest] {
+    /// Filters entries by a case-insensitive substring match against the URL,
+    /// HTTP method and app name, and/or by status class and source app. An
+    /// empty query with `nil` filters matches everything.
+    public func matching(
+        query: String,
+        statusClass: HTTPStatusClass? = nil,
+        app: SourceApp? = nil
+    ) -> [CapturedRequest] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         return filter { entry in
             if let statusClass, entry.statusClass != statusClass {
                 return false
             }
+            if let app, entry.app.bundleIdentifier != app.bundleIdentifier {
+                return false
+            }
             guard !trimmed.isEmpty else { return true }
             return entry.url.localizedCaseInsensitiveContains(trimmed)
                 || entry.method.rawValue.localizedCaseInsensitiveContains(trimmed)
+                || entry.app.displayName.localizedCaseInsensitiveContains(trimmed)
         }
     }
 
