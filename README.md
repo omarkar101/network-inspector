@@ -25,6 +25,35 @@ The project is split in two:
 
   Traffic is simulated by `LiveTrafficGenerator` until real capture exists.
 
+## Turning off an app's internet access
+
+Any app can be cut off from the network (Wi‑Fi and cellular): long-press it
+on the dashboard, use the Wi‑Fi button on its request list, or open
+*Options ▸ Internet Access…* to manage the list and block any installed app
+by bundle identifier.
+
+This is done with a Network Extension **content filter**. The
+`NetworkInspectorFilterData` extension sees every new socket flow along with
+its source app's signing identifier and drops the flows of blocked apps; the
+list reaches it through the filter's vendor configuration
+(`AppBlocklist` in the package holds the matching logic). iOS has no other
+public API for per-app network blocking.
+
+Apple restricts where third-party content filters run:
+
+- The Network Extension capability needs a **paid Apple Developer Program**
+  team. Free Personal Teams can't sign the filter extensions.
+- On an ordinary iPhone the filter only runs in **development-signed builds**
+  installed from Xcode (the normal device-install flow below).
+- **Supervised (MDM) devices** can also run it from distribution builds.
+
+TestFlight and App Store builds on an ordinary iPhone can't install the
+filter. On first use iOS asks to allow the app to filter network content; the
+filter can also be turned off under Settings ▸ General ▸ VPN & Device
+Management. Blocked apps show a red Wi‑Fi slash while the filter is running
+and an orange Wi‑Fi warning when it isn't (their traffic still flows). The
+simulated feed mirrors the setting by dropping blocked apps' requests.
+
 ## Prerequisites
 
 - Xcode 27 (iOS 26 SDK), Swift 6 language mode with strict concurrency.
@@ -61,6 +90,8 @@ local Swift Package dependency.
 
 ```
 NetworkInspector/            App target sources (SwiftUI views, app entry point, assets)
+NetworkInspectorFilterData/  Content filter data provider extension (drops blocked apps' flows)
+NetworkInspectorFilterControl/ Content filter control provider extension (required, no-op)
 NetworkInspectorKit/         Swift Package with all logic + Swift Testing suite
 project.yml                  XcodeGen spec that wires the app target to the local package
 .github/workflows/ci.yml     CI: generates the project, builds for a simulator, runs Kit tests
@@ -69,7 +100,10 @@ project.yml                  XcodeGen spec that wires the app target to the loca
 ## Running on a physical iPhone (free Apple ID)
 
 A free Apple ID is enough to run the app on your own device. Builds signed this
-way expire after 7 days and must be re-installed from Xcode.
+way expire after 7 days and must be re-installed from Xcode. Turning off an
+app's internet access needs a paid team (see above); with a free team, remove
+the two filter extensions from the app target's dependencies in `project.yml`
+and the `NetworkInspector.entitlements` setting to sign.
 
 1. **Add your Apple ID** — Xcode ▸ Settings ▸ Accounts ▸ `+` ▸ Apple ID.
 2. **Find your team ID** — Xcode's Accounts pane lists your personal team as
@@ -105,3 +139,56 @@ way expire after 7 days and must be re-installed from Xcode.
   Apple Developer Program ($99/yr).
 - If the bundle identifier collides with an existing app, change
   `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml` to something unique.
+
+## Manual checks (can't run in remote sessions)
+
+Code in this repo is mostly written from remote Linux sessions, which have no
+Xcode, no simulator and no iPhone, and can't download the Swift toolchain. So
+none of the steps below have run there. Run them on a Mac after pulling a
+change, and report failures back (or paste the error output).
+
+CI is the only automatic check, and it runs only on pull requests and pushes
+to `master`, not on plain branch pushes. Open a PR to get a build.
+
+### Every change
+
+1. Run the package tests:
+   ```sh
+   cd NetworkInspectorKit && swift test
+   ```
+2. Build the app for the simulator:
+   ```sh
+   xcodegen generate
+   xcodebuild -project NetworkInspector.xcodeproj -scheme NetworkInspector \
+     -destination "generic/platform=iOS Simulator" build
+   ```
+
+### Internet toggle (content filter)
+
+Needs a paid team in `DEVELOPMENT_TEAM` and a physical iPhone. The simulator
+can't run content filters; there the Internet Access sheet should show
+"Filter unavailable".
+
+1. Generate with your paid team, then run on the iPhone from Xcode
+   (see "Running on a physical iPhone"). Signing must succeed for all three
+   targets: `NetworkInspector`, `NetworkInspectorFilterData` and
+   `NetworkInspectorFilterControl`. If Xcode complains about the Network
+   Extensions capability, enable it for the three App IDs in the developer
+   portal, or let automatic signing do it.
+2. Open *Options ▸ Internet Access…*, enter the bundle ID of a real
+   installed app (for example `com.apple.mobilesafari` for Safari), tap
+   **Block**, and allow the "Filter Network Content" prompt. Status should
+   read "Filter active".
+3. Open that app: pages should fail to load on both Wi‑Fi and cellular.
+   Other apps should still work.
+4. Swipe the entry away (**Allow**) and check the app gets internet back.
+   With no apps blocked, the filter should turn off.
+5. Block an app again, then turn the filter off in Settings ▸ General ▸ VPN &
+   Device Management and return to the app. The blocked app's icon should
+   turn from a red Wi‑Fi slash to an orange Wi‑Fi warning, and the sheet
+   should read "Filter off" with a **Turn On Filter** button that restores
+   it. Denying the first permission prompt should also show orange, not red.
+6. If blocking has no effect, the filter probably reports app IDs in a format
+   `AppBlocklist.blocks(sourceAppIdentifier:)` doesn't match. Log
+   `flow.sourceAppIdentifier` in `FilterDataProvider.handleNewFlow` and view
+   the output in Console.app, filtered to the filter extension's process.

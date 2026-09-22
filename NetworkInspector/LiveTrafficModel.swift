@@ -9,6 +9,9 @@ import NetworkInspectorKit
 final class LiveTrafficModel {
     var isLive = true
     var sortOrder: AppStatsSortOrder = .activity
+    /// Apps with internet access turned off; the simulated feed drops their
+    /// requests the way the content filter drops their real traffic.
+    var blocklist = AppBlocklist()
 
     private(set) var entries: [CapturedRequest] = []
     private(set) var stats: [AppTrafficStats] = []
@@ -39,7 +42,10 @@ final class LiveTrafficModel {
         now = date
         let burst = Int.random(in: 0...3)
         for _ in 0..<burst {
-            log.append(generator.next(at: date))
+            let request = generator.next(at: date)
+            if !blocklist.contains(request.app.bundleIdentifier) {
+                log.append(request)
+            }
         }
         refresh()
     }

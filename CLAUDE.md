@@ -9,6 +9,11 @@ SwiftUI iOS app for browsing captured HTTP request/response traffic. See
   classification, formatting, search/filtering) and its Swift Testing suite.
   No UIKit/SwiftUI imports, so it stays buildable and testable on Linux.
 - `NetworkInspector/` — thin SwiftUI app target that imports the package.
+- `NetworkInspectorFilterData/`, `NetworkInspectorFilterControl/` — Network
+  Extension content filter extensions that cut blocked apps off the network
+  (per-app "turn internet off"). Needs the `content-filter-provider`
+  entitlement, i.e. a paid team; only runs in dev-signed builds or on
+  supervised devices.
 - `project.yml` — XcodeGen spec. The `.xcodeproj` is generated, never committed.
 - `.github/workflows/ci.yml` — macOS runner: `xcodegen generate`, simulator
   build, `swift test` in the package. Runs on pushes to `master` and on PRs.
@@ -25,7 +30,12 @@ SwiftUI iOS app for browsing captured HTTP request/response traffic. See
 
 - There is no Xcode, and Swift/XcodeGen may not be installed, so app builds
   can't be verified here — CI on GitHub is the check. If `swift` is available,
-  run `cd NetworkInspectorKit && swift test`.
+  run `cd NetworkInspectorKit && swift test`. Downloading the toolchain from
+  download.swift.org is blocked by the network policy.
+- CI only runs on PRs and pushes to `master`, not on plain branch pushes.
+- Keep README "Manual checks (can't run in remote sessions)" up to date: when
+  a change needs verification that can't happen here (device-only behavior,
+  signing, entitlements, permission prompts), add the exact steps there.
 - Active development branch: `claude/swift-ios-app-init-ldhw95` (default
   branch is `master`).
 
