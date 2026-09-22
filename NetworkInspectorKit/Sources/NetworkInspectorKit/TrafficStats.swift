@@ -203,8 +203,6 @@ public struct TrafficSummary: Sendable, Hashable {
             }
         }
         self.activity = activity
-        self.recentBytesSent = recentBytesSent
-        self.recentBytesReceived = recentBytesReceived
     }
 
     public var errorRate: Double {
