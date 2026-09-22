@@ -12,6 +12,7 @@ struct NetworkInspectorApp: App {
 struct RootView: View {
     @State private var model = LiveTrafficModel()
     @State private var internetAccess = InternetAccessController()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView {
@@ -26,7 +27,12 @@ struct RootView: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .task { await model.run() }
-        .task { await internetAccess.refresh() }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            // Also catches the filter being turned off in Settings meanwhile.
+            if phase == .active {
+                Task { await internetAccess.refresh() }
+            }
+        }
         .onChange(of: internetAccess.blocklist, initial: true) { _, blocklist in
             model.blocklist = blocklist
         }

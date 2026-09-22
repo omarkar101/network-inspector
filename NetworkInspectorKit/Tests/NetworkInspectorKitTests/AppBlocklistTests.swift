@@ -103,4 +103,15 @@ struct AppBlocklistTests {
         let data = try JSONEncoder().encode(original)
         #expect(try JSONDecoder().decode(AppBlocklist.self, from: data) == original)
     }
+
+    @Test("decoding normalizes and drops invalid stored entries")
+    func decodingNormalizes() throws {
+        let json = Data(#"{"bundleIdentifiers":["Com.Example.Stride","bad id","nodots"]}"#.utf8)
+        var decoded = try JSONDecoder().decode(AppBlocklist.self, from: json)
+        #expect(decoded.sortedBundleIdentifiers == ["com.example.stride"])
+        #expect(decoded.blocks(sourceAppIdentifier: "A1B2C3D4E5.com.example.stride"))
+
+        decoded.setBlocked(false, bundleIdentifier: "com.example.stride")
+        #expect(decoded.isEmpty)
+    }
 }

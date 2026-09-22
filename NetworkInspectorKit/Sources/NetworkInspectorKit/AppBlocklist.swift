@@ -12,12 +12,23 @@ public struct AppBlocklist: Sendable, Hashable, Codable {
 
     public private(set) var bundleIdentifiers: Set<String>
 
+    private enum CodingKeys: String, CodingKey {
+        case bundleIdentifiers
+    }
+
     public init() {
         bundleIdentifiers = []
     }
 
     public init(bundleIdentifiers: some Sequence<String>) {
         self.bundleIdentifiers = Set(bundleIdentifiers.compactMap(Self.normalized))
+    }
+
+    /// Decodes through the normalizing initializer, so stored entries that
+    /// aren't lowercased or valid can't end up unmatchable and unremovable.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(bundleIdentifiers: try container.decode([String].self, forKey: .bundleIdentifiers))
     }
 
     /// Reads the list back out of a filter vendor configuration. A missing or

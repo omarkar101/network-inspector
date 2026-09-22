@@ -37,7 +37,11 @@ struct InternetAccessView: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(controller.blocklist.sortedBundleIdentifiers, id: \.self) { bundleIdentifier in
-                        BlockedAppRow(bundleIdentifier: bundleIdentifier, app: knownApp(for: bundleIdentifier))
+                        BlockedAppRow(
+                            bundleIdentifier: bundleIdentifier,
+                            app: knownApp(for: bundleIdentifier),
+                            isEnforced: controller.isFilterActive
+                        )
                             .swipeActions {
                                 Button("Allow", systemImage: "wifi") {
                                     controller.setInternetBlocked(false, bundleIdentifier: bundleIdentifier)
@@ -125,6 +129,7 @@ private struct FilterStatusRow: View {
 private struct BlockedAppRow: View {
     let bundleIdentifier: String
     let app: SourceApp?
+    let isEnforced: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -145,10 +150,20 @@ private struct BlockedAppRow: View {
                 }
             }
             Spacer()
-            Image(systemName: "wifi.slash")
-                .foregroundStyle(.red)
-                .accessibilityLabel("Internet off")
+            BlockedIndicator(isEnforced: isEnforced)
         }
+    }
+}
+
+/// Marks a blocked app: red when the filter is cutting it off, orange when
+/// it's on the list but the filter isn't running, so its traffic still flows.
+struct BlockedIndicator: View {
+    let isEnforced: Bool
+
+    var body: some View {
+        Image(systemName: isEnforced ? "wifi.slash" : "wifi.exclamationmark")
+            .foregroundStyle(isEnforced ? Color.red : Color.orange)
+            .accessibilityLabel(isEnforced ? "Internet off" : "Blocked, but the filter is off")
     }
 }
 
@@ -167,7 +182,7 @@ struct InternetAccessToggle: View {
                 systemImage: blocked ? "wifi.slash" : "wifi"
             )
         }
-        .tint(blocked ? Color.red : nil)
+        .tint(blocked ? (controller.isFilterActive ? Color.red : Color.orange) : nil)
         .disabled(!controller.canBlock(app))
         .sensoryFeedback(.impact, trigger: blocked)
         .contentTransition(.symbolEffect(.replace))

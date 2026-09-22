@@ -42,6 +42,14 @@ final class InternetAccessController {
         blocklist.contains(app.bundleIdentifier)
     }
 
+    /// Whether blocked apps are actually cut off right now. The list can be
+    /// non-empty while the filter is off (permission denied, a failed save,
+    /// or the user turned it off in Settings), so the UI must not claim an
+    /// app's internet is off unless this is true.
+    var isFilterActive: Bool {
+        filterState == .on
+    }
+
     func canBlock(_ app: SourceApp) -> Bool {
         AppBlocklist.isValidBundleIdentifier(app.bundleIdentifier)
     }
@@ -58,8 +66,19 @@ final class InternetAccessController {
         scheduleSync()
     }
 
-    /// Reads the filter's current state without changing it.
+    /// Reads the filter's current state without changing it. Queued behind
+    /// any in-flight sync so a stale read can't overwrite the saved state.
     func refresh() async {
+        let previous = pendingSync
+        let task = Task {
+            await previous?.value
+            await readState()
+        }
+        pendingSync = task
+        await task.value
+    }
+
+    private func readState() async {
         let manager = NEFilterManager.shared()
         do {
             try await load(manager)
@@ -74,7 +93,7 @@ final class InternetAccessController {
         scheduleSync()
     }
 
-    /// Queues a sync behind any in-flight one so saves never interleave.
+    /// Queues a sync behind any in-flight load or save so they never interleave.
     private func scheduleSync() {
         let previous = pendingSync
         pendingSync = Task {

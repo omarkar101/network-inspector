@@ -50,8 +50,9 @@ Apple restricts where third-party content filters run:
 TestFlight and App Store builds on an ordinary iPhone can't install the
 filter. On first use iOS asks to allow the app to filter network content; the
 filter can also be turned off under Settings ▸ General ▸ VPN & Device
-Management. The simulated feed mirrors the setting by dropping blocked apps'
-requests.
+Management. Blocked apps show a red Wi‑Fi slash while the filter is running
+and an orange Wi‑Fi warning when it isn't (their traffic still flows). The
+simulated feed mirrors the setting by dropping blocked apps' requests.
 
 ## Prerequisites
 
@@ -182,7 +183,12 @@ can't run content filters; there the Internet Access sheet should show
    Other apps should still work.
 4. Swipe the entry away (**Allow**) and check the app gets internet back.
    With no apps blocked, the filter should turn off.
-5. If blocking has no effect, the filter probably reports app IDs in a format
+5. Block an app again, then turn the filter off in Settings ▸ General ▸ VPN &
+   Device Management and return to the app. The blocked app's icon should
+   turn from a red Wi‑Fi slash to an orange Wi‑Fi warning, and the sheet
+   should read "Filter off" with a **Turn On Filter** button that restores
+   it. Denying the first permission prompt should also show orange, not red.
+6. If blocking has no effect, the filter probably reports app IDs in a format
    `AppBlocklist.blocks(sourceAppIdentifier:)` doesn't match. Log
    `flow.sourceAppIdentifier` in `FilterDataProvider.handleNewFlow` and view
    the output in Console.app, filtered to the filter extension's process.

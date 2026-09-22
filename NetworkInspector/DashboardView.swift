@@ -30,7 +30,8 @@ struct AppStatsDashboardView: View {
                                         stats: stats,
                                         sortOrder: model.sortOrder,
                                         share: model.summary.share(of: stats),
-                                        isInternetBlocked: internetAccess.isBlocked(stats.app)
+                                        isInternetBlocked: internetAccess.isBlocked(stats.app),
+                                        isFilterActive: internetAccess.isFilterActive
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -248,6 +249,7 @@ private struct AppStatsRow: View {
     let sortOrder: AppStatsSortOrder
     let share: Double
     let isInternetBlocked: Bool
+    let isFilterActive: Bool
 
     private var tint: Color { stats.app.tint }
 
@@ -270,10 +272,8 @@ private struct AppStatsRow: View {
                         .font(.headline)
                         .lineLimit(1)
                     if isInternetBlocked {
-                        Image(systemName: "wifi.slash")
+                        BlockedIndicator(isEnforced: isFilterActive)
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(.red)
-                            .accessibilityLabel("Internet off")
                     } else if stats.isActive {
                         Circle()
                             .fill(.green)
