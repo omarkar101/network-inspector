@@ -30,7 +30,7 @@ struct ContentView: View {
             .navigationTitle("Network Inspector")
             .searchable(text: $model.searchText, prompt: "Search URL or method")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("All") { model.selectedStatusClass = nil }
                         ForEach(HTTPStatusClass.allCases, id: \.self) { statusClass in

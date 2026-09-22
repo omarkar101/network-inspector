@@ -1,7 +1,6 @@
 import Foundation
 
-/// HTTP verbs recognized by the inspector. Unrecognized verbs are preserved
-/// via `.other` so unusual or custom methods are never dropped silently.
+/// HTTP verbs recognized by the inspector.
 public enum HTTPMethod: String, Sendable, Hashable, CaseIterable {
     case get = "GET"
     case post = "POST"
