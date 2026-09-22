@@ -52,3 +52,37 @@ NetworkInspectorKit/         Swift Package with all logic + Swift Testing suite
 project.yml                  XcodeGen spec that wires the app target to the local package
 .github/workflows/ci.yml     CI: generates the project, builds for a simulator, runs Kit tests
 ```
+
+## Running on a physical iPhone (free Apple ID)
+
+A free Apple ID is enough to run the app on your own device. Builds signed this
+way expire after 7 days and must be re-installed from Xcode.
+
+1. **Add your Apple ID** — Xcode ▸ Settings ▸ Accounts ▸ `+` ▸ Apple ID.
+2. **Find your team ID** — in that same Accounts pane, your personal team is
+   listed as "<Your Name> (Personal Team)". Click *Manage Certificates…* or see
+   the Team ID column; it is a 10-character string like `A1B2C3D4E5`.
+3. **Generate the project with your team:**
+   ```sh
+   export DEVELOPMENT_TEAM=A1B2C3D4E5   # your ID from step 2
+   xcodegen generate
+   open NetworkInspector.xcodeproj
+   ```
+   Keeping this in an env var means no personal team ID is committed.
+4. **Enable Developer Mode on the iPhone** (iOS 16+) — Settings ▸ Privacy &
+   Security ▸ Developer Mode ▸ on, then reboot. The option only appears after
+   the device has been connected to Xcode at least once.
+5. **Build to the device** — connect over USB, pick the iPhone in Xcode's
+   destination menu, press Run (⌘R).
+6. **Trust the developer** — the first launch fails with "Untrusted Developer".
+   On the iPhone: Settings ▸ General ▸ VPN & Device Management ▸ tap your Apple
+   ID ▸ Trust.
+
+### Free-account limits
+
+- Builds stop launching after **7 days**; re-run from Xcode to renew.
+- Max 3 distinct apps signed at once, and 10 device registrations per week.
+- No TestFlight and no over-the-air install — those need the paid
+  Apple Developer Program ($99/yr).
+- If the bundle identifier collides with an existing app, change
+  `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml` to something unique.
