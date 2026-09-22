@@ -5,6 +5,9 @@ import NetworkInspectorKit
 /// list of apps that reshuffles as traffic flows in.
 struct AppStatsDashboardView: View {
     @Bindable var model: LiveTrafficModel
+    let internetAccess: InternetAccessController
+
+    @State private var showsInternetAccess = false
 
     var body: some View {
         let ranked = model.rankedStats
@@ -26,10 +29,14 @@ struct AppStatsDashboardView: View {
                                         rank: index + 1,
                                         stats: stats,
                                         sortOrder: model.sortOrder,
-                                        share: model.summary.share(of: stats)
+                                        share: model.summary.share(of: stats),
+                                        isInternetBlocked: internetAccess.isBlocked(stats.app)
                                     )
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    InternetAccessToggle(controller: internetAccess, app: stats.app)
+                                }
                                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
                             }
                         }
@@ -52,6 +59,14 @@ struct AppStatsDashboardView: View {
             .navigationTitle("Live Traffic")
             .navigationDestination(for: SourceApp.self) { app in
                 RequestListView(title: app.displayName, entries: model.entries(for: app), showsApp: false)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            InternetAccessToggle(controller: internetAccess, app: app)
+                        }
+                    }
+            }
+            .sheet(isPresented: $showsInternetAccess) {
+                InternetAccessView(controller: internetAccess, knownApps: model.stats.map(\.app))
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -62,6 +77,9 @@ struct AppStatsDashboardView: View {
                         Button(model.isLive ? "Pause Capture" : "Resume Capture",
                                systemImage: model.isLive ? "pause.fill" : "play.fill") {
                             model.isLive.toggle()
+                        }
+                        Button("Internet Access…", systemImage: "wifi.slash") {
+                            showsInternetAccess = true
                         }
                         Button("Clear Traffic", systemImage: "trash", role: .destructive) {
                             model.clear()
@@ -229,6 +247,7 @@ private struct AppStatsRow: View {
     let stats: AppTrafficStats
     let sortOrder: AppStatsSortOrder
     let share: Double
+    let isInternetBlocked: Bool
 
     private var tint: Color { stats.app.tint }
 
@@ -250,7 +269,12 @@ private struct AppStatsRow: View {
                     Text(stats.app.displayName)
                         .font(.headline)
                         .lineLimit(1)
-                    if stats.isActive {
+                    if isInternetBlocked {
+                        Image(systemName: "wifi.slash")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("Internet off")
+                    } else if stats.isActive {
                         Circle()
                             .fill(.green)
                             .frame(width: 6, height: 6)
@@ -389,5 +413,5 @@ private struct DashboardBackground: View {
 }
 
 #Preview {
-    AppStatsDashboardView(model: LiveTrafficModel(seed: 42))
+    AppStatsDashboardView(model: LiveTrafficModel(seed: 42), internetAccess: InternetAccessController())
 }

@@ -25,6 +25,34 @@ The project is split in two:
 
   Traffic is simulated by `LiveTrafficGenerator` until real capture exists.
 
+## Turning off an app's internet access
+
+Any app can be cut off from the network (Wi‑Fi and cellular): long-press it
+on the dashboard, use the Wi‑Fi button on its request list, or open
+*Options ▸ Internet Access…* to manage the list and block any installed app
+by bundle identifier.
+
+This is done with a Network Extension **content filter**. The
+`NetworkInspectorFilterData` extension sees every new socket flow along with
+its source app's signing identifier and drops the flows of blocked apps; the
+list reaches it through the filter's vendor configuration
+(`AppBlocklist` in the package holds the matching logic). iOS has no other
+public API for per-app network blocking.
+
+Apple restricts where third-party content filters run:
+
+- The Network Extension capability needs a **paid Apple Developer Program**
+  team. Free Personal Teams can't sign the filter extensions.
+- On an ordinary iPhone the filter only runs in **development-signed builds**
+  installed from Xcode (the normal device-install flow below).
+- **Supervised (MDM) devices** can also run it from distribution builds.
+
+TestFlight and App Store builds on an ordinary iPhone can't install the
+filter. On first use iOS asks to allow the app to filter network content; the
+filter can also be turned off under Settings ▸ General ▸ VPN & Device
+Management. The simulated feed mirrors the setting by dropping blocked apps'
+requests.
+
 ## Prerequisites
 
 - Xcode 27 (iOS 26 SDK), Swift 6 language mode with strict concurrency.
@@ -61,6 +89,8 @@ local Swift Package dependency.
 
 ```
 NetworkInspector/            App target sources (SwiftUI views, app entry point, assets)
+NetworkInspectorFilterData/  Content filter data provider extension (drops blocked apps' flows)
+NetworkInspectorFilterControl/ Content filter control provider extension (required, no-op)
 NetworkInspectorKit/         Swift Package with all logic + Swift Testing suite
 project.yml                  XcodeGen spec that wires the app target to the local package
 .github/workflows/ci.yml     CI: generates the project, builds for a simulator, runs Kit tests
@@ -69,7 +99,10 @@ project.yml                  XcodeGen spec that wires the app target to the loca
 ## Running on a physical iPhone (free Apple ID)
 
 A free Apple ID is enough to run the app on your own device. Builds signed this
-way expire after 7 days and must be re-installed from Xcode.
+way expire after 7 days and must be re-installed from Xcode. Turning off an
+app's internet access needs a paid team (see above); with a free team, remove
+the two filter extensions from the app target's dependencies in `project.yml`
+and the `NetworkInspector.entitlements` setting to sign.
 
 1. **Add your Apple ID** — Xcode ▸ Settings ▸ Accounts ▸ `+` ▸ Apple ID.
 2. **Find your team ID** — Xcode's Accounts pane lists your personal team as
