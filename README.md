@@ -138,3 +138,51 @@ and the `NetworkInspector.entitlements` setting to sign.
   Apple Developer Program ($99/yr).
 - If the bundle identifier collides with an existing app, change
   `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml` to something unique.
+
+## Manual checks (can't run in remote sessions)
+
+Code in this repo is mostly written from remote Linux sessions, which have no
+Xcode, no simulator and no iPhone, and can't download the Swift toolchain. So
+none of the steps below have run there. Run them on a Mac after pulling a
+change, and report failures back (or paste the error output).
+
+CI is the only automatic check, and it runs only on pull requests and pushes
+to `master`, not on plain branch pushes. Open a PR to get a build.
+
+### Every change
+
+1. Run the package tests:
+   ```sh
+   cd NetworkInspectorKit && swift test
+   ```
+2. Build the app for the simulator:
+   ```sh
+   xcodegen generate
+   xcodebuild -project NetworkInspector.xcodeproj -scheme NetworkInspector \
+     -destination "generic/platform=iOS Simulator" build
+   ```
+
+### Internet toggle (content filter)
+
+Needs a paid team in `DEVELOPMENT_TEAM` and a physical iPhone. The simulator
+can't run content filters; there the Internet Access sheet should show
+"Filter unavailable".
+
+1. Generate with your paid team, then run on the iPhone from Xcode
+   (see "Running on a physical iPhone"). Signing must succeed for all three
+   targets: `NetworkInspector`, `NetworkInspectorFilterData` and
+   `NetworkInspectorFilterControl`. If Xcode complains about the Network
+   Extensions capability, enable it for the three App IDs in the developer
+   portal, or let automatic signing do it.
+2. Open *Options ▸ Internet Access…*, enter the bundle ID of a real
+   installed app (for example `com.apple.mobilesafari` for Safari), tap
+   **Block**, and allow the "Filter Network Content" prompt. Status should
+   read "Filter active".
+3. Open that app: pages should fail to load on both Wi‑Fi and cellular.
+   Other apps should still work.
+4. Swipe the entry away (**Allow**) and check the app gets internet back.
+   With no apps blocked, the filter should turn off.
+5. If blocking has no effect, the filter probably reports app IDs in a format
+   `AppBlocklist.blocks(sourceAppIdentifier:)` doesn't match. Log
+   `flow.sourceAppIdentifier` in `FilterDataProvider.handleNewFlow` and view
+   the output in Console.app, filtered to the filter extension's process.

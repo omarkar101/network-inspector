@@ -30,7 +30,12 @@ SwiftUI iOS app for browsing captured HTTP request/response traffic. See
 
 - There is no Xcode, and Swift/XcodeGen may not be installed, so app builds
   can't be verified here — CI on GitHub is the check. If `swift` is available,
-  run `cd NetworkInspectorKit && swift test`.
+  run `cd NetworkInspectorKit && swift test`. Downloading the toolchain from
+  download.swift.org is blocked by the network policy.
+- CI only runs on PRs and pushes to `master`, not on plain branch pushes.
+- Keep README "Manual checks (can't run in remote sessions)" up to date: when
+  a change needs verification that can't happen here (device-only behavior,
+  signing, entitlements, permission prompts), add the exact steps there.
 - Active development branch: `claude/swift-ios-app-init-ldhw95` (default
   branch is `master`).
 
