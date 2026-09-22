@@ -43,6 +43,22 @@ struct CapturedRequestTests {
         #expect(entry.formattedResponseSize == Formatting.byteSize(1_536))
     }
 
+    @Test("upload and download speed derive from body size over duration")
+    func transferSpeeds() {
+        let entry = makeEntry(durationSeconds: 0.5, requestBodySize: 2_048, responseBodySize: 1_048_576)
+        #expect(entry.downloadBytesPerSecond == 2_097_152)
+        #expect(entry.uploadBytesPerSecond == 4_096)
+        #expect(entry.formattedDownloadSpeed == "2 MB/s")
+        #expect(entry.formattedUploadSpeed == "4 KB/s")
+    }
+
+    @Test("speed is zero when the request took no time")
+    func transferSpeedZeroDuration() {
+        let entry = makeEntry(durationSeconds: 0, requestBodySize: 10, responseBodySize: 10)
+        #expect(entry.downloadBytesPerSecond == 0)
+        #expect(entry.uploadBytesPerSecond == 0)
+    }
+
     @Test("matching filters by URL or method substring, case-insensitively")
     func matchingByText() {
         let entries = [
@@ -82,6 +98,32 @@ struct CapturedRequestTests {
         let result = entries.matching(query: "users", statusClass: .clientError)
         #expect(result.count == 1)
         #expect(result.first?.statusCode == 404)
+    }
+
+    @Test("matching filters by source app and searches app names")
+    func matchingByApp() {
+        let courier = SampleData.Apps.courier
+        let frame = SampleData.Apps.frame
+        let entries = [
+            CapturedRequest(app: courier, method: .get, url: "https://a.example/1", statusCode: 200,
+                            durationSeconds: 0.1, requestBodySize: 0, responseBodySize: 1),
+            CapturedRequest(app: courier, method: .post, url: "https://a.example/2", statusCode: 500,
+                            durationSeconds: 0.1, requestBodySize: 0, responseBodySize: 1),
+            CapturedRequest(app: frame, method: .get, url: "https://b.example/1", statusCode: 200,
+                            durationSeconds: 0.1, requestBodySize: 0, responseBodySize: 1)
+        ]
+
+        #expect(entries.matching(query: "", app: courier).count == 2)
+        #expect(entries.matching(query: "", app: frame).count == 1)
+        #expect(entries.matching(query: "", statusClass: .serverError, app: courier).count == 1)
+        #expect(entries.matching(query: "", statusClass: .serverError, app: frame).isEmpty)
+        #expect(entries.matching(query: "cour").count == 2)
+        #expect(entries.matching(query: "FRAME").count == 1)
+    }
+
+    @Test("requests default to the unknown app")
+    func defaultApp() {
+        #expect(makeEntry().app == .unknown)
     }
 
     @Test("sortedByRecency orders newest first")
