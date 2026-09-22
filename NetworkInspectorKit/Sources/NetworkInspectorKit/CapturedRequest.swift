@@ -67,9 +67,31 @@ public struct CapturedRequest: Sendable, Identifiable, Hashable {
         Formatting.byteSize(responseBodySize)
     }
 
-    /// A short, formatted request size string, e.g. "512 B".
+    /// A short, formatted request size string, e.g. "0.5 KB".
     public var formattedRequestSize: String {
         Formatting.byteSize(requestBodySize)
+    }
+
+    /// Average speed the response body was downloaded at, in bytes per second.
+    /// Zero when the request took no measurable time.
+    public var downloadBytesPerSecond: Double {
+        durationSeconds > 0 ? Double(responseBodySize) / durationSeconds : 0
+    }
+
+    /// Average speed the request body was uploaded at, in bytes per second.
+    /// Zero when the request took no measurable time.
+    public var uploadBytesPerSecond: Double {
+        durationSeconds > 0 ? Double(requestBodySize) / durationSeconds : 0
+    }
+
+    /// A short, formatted download speed, e.g. "1.2 MB/s".
+    public var formattedDownloadSpeed: String {
+        Formatting.speed(bytesPerSecond: downloadBytesPerSecond)
+    }
+
+    /// A short, formatted upload speed, e.g. "48 KB/s".
+    public var formattedUploadSpeed: String {
+        Formatting.speed(bytesPerSecond: uploadBytesPerSecond)
     }
 }
 

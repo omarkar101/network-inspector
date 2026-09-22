@@ -38,15 +38,22 @@ struct FormattingTests {
     }
 
     @Test(
-        "byte size formats across binary unit boundaries",
+        "byte size starts at KB, then steps up to MB and GB",
         arguments: [
-            (0, "0 B"),
-            (512, "512 B"),
+            (0, "0 KB"),
+            (1, "<0.1 KB"),
+            (512, "0.5 KB"),
             (1_024, "1 KB"),
             (1_536, "1.5 KB"),
+            (10_240, "10 KB"),
+            (153_600, "150 KB"),
+            (1_048_064, "1 MB"),       // 1023.5 KB displays as 1024 -> promoted
+            (1_047_552, "1023 KB"),
             (1_048_576, "1 MB"),
             (1_572_864, "1.5 MB"),
-            (1_073_741_824, "1 GB")
+            (524_288_000, "500 MB"),
+            (1_073_741_824, "1 GB"),
+            (2_684_354_560, "2.5 GB")
         ]
     )
     func byteSize(bytes: Int, expected: String) {
@@ -99,5 +106,30 @@ struct FormattingTests {
     func rateInvalid() {
         #expect(Formatting.rate(perMinute: -1) == "—")
         #expect(Formatting.rate(perMinute: .infinity) == "—")
+    }
+
+    @Test(
+        "speed uses the same KB, MB, GB steps per second",
+        arguments: [
+            (0.0, "0 KB/s"),
+            (512.0, "0.5 KB/s"),
+            (870_400.0, "850 KB/s"),
+            (2_516_582.4, "2.4 MB/s"),
+            (1_073_741_824.0, "1 GB/s")
+        ]
+    )
+    func speed(bytesPerSecond: Double, expected: String) {
+        #expect(Formatting.speed(bytesPerSecond: bytesPerSecond) == expected)
+    }
+
+    @Test("speed rejects negative or non-finite values")
+    func speedInvalid() {
+        #expect(Formatting.speed(bytesPerSecond: -1) == "—")
+        #expect(Formatting.speed(bytesPerSecond: .nan) == "—")
+    }
+
+    @Test("byte sizes never fall back to plain bytes", arguments: [0, 1, 100, 1_000, 1_023])
+    func noPlainBytes(bytes: Int) {
+        #expect(!Formatting.byteSize(bytes).hasSuffix(" B"))
     }
 }

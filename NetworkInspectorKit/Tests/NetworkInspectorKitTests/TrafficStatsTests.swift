@@ -36,7 +36,9 @@ struct TrafficStatsTests {
         failures: Int = 0,
         bytes: Int = 0,
         latency: Double = 0.1,
-        recent: Int = 0
+        recent: Int = 0,
+        recentSent: Int = 0,
+        recentReceived: Int = 0
     ) -> AppTrafficStats {
         AppTrafficStats(
             app: app,
@@ -48,7 +50,9 @@ struct TrafficStatsTests {
             lastActivity: now,
             recentRequestCount: recent,
             rateWindow: 60,
-            activity: []
+            activity: [],
+            recentBytesSent: recentSent,
+            recentBytesReceived: recentReceived
         )
     }
 
@@ -102,6 +106,23 @@ struct TrafficStatsTests {
         #expect(result.requestsPerMinute == 3)
         #expect(result.isActive)
         #expect(result.lastActivity == now.addingTimeInterval(5))
+    }
+
+    @Test("upload and download speed only count bytes inside the window")
+    func transferSpeed() throws {
+        let entries = [
+            request(alpha, sent: 600, received: 6_000, age: 1),
+            request(alpha, sent: 600, received: 6_000, age: 59),
+            request(alpha, sent: 999_999, received: 999_999, age: 120)  // outside
+        ]
+        let result = try #require(TrafficStats.perApp(entries, now: now, rateWindow: 60).first)
+        #expect(result.recentBytesSent == 1_200)
+        #expect(result.recentBytesReceived == 12_000)
+        #expect(result.uploadBytesPerSecond == 20)
+        #expect(result.downloadBytesPerSecond == 200)
+        #expect(result.totalBytesPerSecond == 220)
+        // Totals still cover everything.
+        #expect(result.totalBytes == 1_200 + 12_000 + 999_999 * 2)
     }
 
     @Test("requests per minute normalizes shorter windows")
@@ -159,6 +180,16 @@ struct TrafficStatsTests {
     func rankByRequests() {
         let list = [stats(alpha, requests: 3), stats(bravo, requests: 1), stats(charlie, requests: 7)]
         #expect(list.ranked(by: .requests).map(\.app) == [charlie, alpha, bravo])
+    }
+
+    @Test("ranks by combined transfer speed, fastest first")
+    func rankBySpeed() {
+        let list = [
+            stats(alpha, recentSent: 600, recentReceived: 0),       // 10 B/s
+            stats(bravo, recentSent: 0, recentReceived: 60_000),    // 1000 B/s
+            stats(charlie, recentSent: 3_000, recentReceived: 3_000) // 100 B/s
+        ]
+        #expect(list.ranked(by: .speed).map(\.app) == [bravo, charlie, alpha])
     }
 
     @Test("ranks by data transferred, highest first")
@@ -226,8 +257,11 @@ struct TrafficStatsTests {
             lastActivity: now,
             recentRequestCount: 12,
             rateWindow: 60,
-            activity: []
+            activity: [],
+            recentBytesSent: 61_440,
+            recentBytesReceived: 3_686_400
         )
+        #expect(s.headline(for: .speed) == StatHeadline(value: "61 KB/s", caption: "down + up"))
         #expect(s.headline(for: .activity) == StatHeadline(value: "12/min", caption: "per min"))
         #expect(s.headline(for: .requests) == StatHeadline(value: "40", caption: "requests"))
         #expect(s.headline(for: .data) == StatHeadline(value: "1.5 KB", caption: "transferred"))
@@ -254,6 +288,9 @@ struct TrafficStatsTests {
         #expect(summary.activeAppCount == 2)
         #expect(summary.requestsPerMinute == 3)
         #expect(summary.activity == [0, 1, 0, 2])
+        // Recent bytes: alpha sent 10, received 90 + 100; bravo received 100.
+        #expect(summary.uploadBytesPerSecond == 10.0 / 60)
+        #expect(abs(summary.downloadBytesPerSecond - 290.0 / 60) < 1e-9)
 
         let alphaStats = try #require(perApp.first { $0.app == alpha })
         #expect(summary.share(of: alphaStats) == 0.5)

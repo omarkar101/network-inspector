@@ -43,6 +43,22 @@ struct CapturedRequestTests {
         #expect(entry.formattedResponseSize == Formatting.byteSize(1_536))
     }
 
+    @Test("upload and download speed derive from body size over duration")
+    func transferSpeeds() {
+        let entry = makeEntry(durationSeconds: 0.5, requestBodySize: 2_048, responseBodySize: 1_048_576)
+        #expect(entry.downloadBytesPerSecond == 2_097_152)
+        #expect(entry.uploadBytesPerSecond == 4_096)
+        #expect(entry.formattedDownloadSpeed == "2 MB/s")
+        #expect(entry.formattedUploadSpeed == "4 KB/s")
+    }
+
+    @Test("speed is zero when the request took no time")
+    func transferSpeedZeroDuration() {
+        let entry = makeEntry(durationSeconds: 0, requestBodySize: 10, responseBodySize: 10)
+        #expect(entry.downloadBytesPerSecond == 0)
+        #expect(entry.uploadBytesPerSecond == 0)
+    }
+
     @Test("matching filters by URL or method substring, case-insensitively")
     func matchingByText() {
         let entries = [

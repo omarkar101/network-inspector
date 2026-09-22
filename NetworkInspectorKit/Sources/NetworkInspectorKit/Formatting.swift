@@ -21,30 +21,42 @@ public enum Formatting {
         return String(format: "%.1f s", tenths)
     }
 
-    /// Formats a byte count using binary (1024-based) units, e.g. "1.5 KB".
+    /// Formats a byte count starting at kilobytes and stepping up through
+    /// MB, GB and TB (1024-based), e.g. "0.5 KB", "1.5 KB", "12 MB".
     ///
-    /// Uses the same abbreviations as `ByteCountFormatter` would, but is a pure
-    /// function so it can be unit tested without relying on Foundation's
-    /// locale-dependent formatter on non-Apple platforms.
+    /// Sizes never drop to bytes so every value in a list reads in the same
+    /// family of units. Non-zero sizes too small to show are "<0.1 KB".
+    /// A pure function so it can be unit tested without relying on
+    /// Foundation's locale-dependent formatter on non-Apple platforms.
     public static func byteSize(_ bytes: Int) -> String {
         guard bytes >= 0 else { return "—" }
+        return scaledKilobytes(Double(bytes))
+    }
 
-        let units = ["B", "KB", "MB", "GB", "TB"]
-        var value = Double(bytes)
+    /// Formats a transfer speed in bytes per second, e.g. "850 KB/s", "2.4 MB/s".
+    public static func speed(bytesPerSecond: Double) -> String {
+        guard bytesPerSecond.isFinite, bytesPerSecond >= 0 else { return "—" }
+        return scaledKilobytes(bytesPerSecond) + "/s"
+    }
+
+    private static func scaledKilobytes(_ bytes: Double) -> String {
+        let units = ["KB", "MB", "GB", "TB"]
+        var value = bytes / 1024
         var unitIndex = 0
 
-        while value >= 1024, unitIndex < units.count - 1 {
+        // Promote once the value would display as 1024 or more in this unit
+        // (values of 100 and up are shown as whole numbers).
+        while value.rounded() >= 1024, unitIndex < units.count - 1 {
             value /= 1024
             unitIndex += 1
         }
 
-        if unitIndex == 0 {
-            return "\(bytes) \(units[unitIndex])"
-        }
-
         let rounded = (value * 10).rounded() / 10
-        if rounded == rounded.rounded() {
-            return "\(Int(rounded)) \(units[unitIndex])"
+        if rounded == 0, bytes > 0 {
+            return "<0.1 \(units[unitIndex])"
+        }
+        if rounded >= 100 || rounded == rounded.rounded() {
+            return "\(Int(value.rounded())) \(units[unitIndex])"
         }
         return String(format: "%.1f %@", rounded, units[unitIndex])
     }

@@ -98,9 +98,21 @@ private struct SummaryGrid: View {
                 tint: .indigo
             )
             StatTile(
+                title: "Download",
+                value: Formatting.speed(bytesPerSecond: summary.downloadBytesPerSecond),
+                systemImage: "arrow.down.circle.fill",
+                tint: .blue
+            )
+            StatTile(
+                title: "Upload",
+                value: Formatting.speed(bytesPerSecond: summary.uploadBytesPerSecond),
+                systemImage: "arrow.up.circle.fill",
+                tint: .purple
+            )
+            StatTile(
                 title: "Transferred",
                 value: Formatting.byteSize(summary.totalBytes),
-                systemImage: "arrow.up.arrow.down",
+                systemImage: "externaldrive.fill",
                 tint: .mint
             )
             StatTile(
@@ -201,6 +213,7 @@ private extension AppStatsSortOrder {
         switch self {
         case .activity: "bolt.fill"
         case .requests: "number"
+        case .speed: "speedometer"
         case .data: "externaldrive.fill"
         case .errors: "exclamationmark.octagon.fill"
         case .latency: "timer"
@@ -257,6 +270,22 @@ private struct AppStatsRow: View {
                 .foregroundStyle(.secondary)
                 .labelStyle(CompactLabelStyle())
                 .monospacedDigit()
+
+                HStack(spacing: 10) {
+                    Label(Formatting.speed(bytesPerSecond: stats.downloadBytesPerSecond), systemImage: "arrow.down")
+                        .foregroundStyle(Color.blue)
+                    Label(Formatting.speed(bytesPerSecond: stats.uploadBytesPerSecond), systemImage: "arrow.up")
+                        .foregroundStyle(Color.purple)
+                }
+                .font(.caption.weight(.medium))
+                .labelStyle(CompactLabelStyle())
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    "Download \(Formatting.speed(bytesPerSecond: stats.downloadBytesPerSecond)), "
+                        + "upload \(Formatting.speed(bytesPerSecond: stats.uploadBytesPerSecond))"
+                )
 
                 ShareBar(share: share, tint: tint)
             }

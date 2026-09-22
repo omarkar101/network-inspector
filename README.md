@@ -11,11 +11,17 @@ The project is split in two:
   well as macOS.
 - **`NetworkInspector`** — a thin SwiftUI app target (app lifecycle, views,
   assets) that imports `NetworkInspectorKit`. It has two tabs:
-  - **Apps** — a live dashboard with totals (throughput, active apps, data,
-    error rate) and a ranked list of apps with sparklines. The list can be
-    sorted by live activity, requests, data, errors, latency or name, and
-    reorders as traffic arrives. Tap an app to see its requests.
-  - **Requests** — a searchable, status-filterable list of every request.
+  - **Apps** — a live dashboard with totals (throughput, active apps,
+    download and upload speed, data, error rate) and a ranked list of apps
+    with sparklines and live ↓/↑ speeds. The list can be sorted by live
+    activity, requests, speed, data, errors, latency or name, and reorders as
+    traffic arrives. Tap an app to see its requests.
+  - **Requests** — a searchable, status-filterable list of every request,
+    with each one's download (and upload) speed.
+
+  Sizes are always shown starting at KB, stepping up to MB then GB
+  (e.g. "0.5 KB", "850 KB", "2.4 MB", "1.1 GB"); speeds use the same units
+  per second.
 
   Traffic is simulated by `LiveTrafficGenerator` until real capture exists.
 

@@ -101,9 +101,30 @@ private struct RequestRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+
+                HStack(spacing: 10) {
+                    Label(entry.formattedDownloadSpeed, systemImage: "arrow.down")
+                        .foregroundStyle(Color.blue)
+                    if entry.requestBodySize > 0 {
+                        Label(entry.formattedUploadSpeed, systemImage: "arrow.up")
+                            .foregroundStyle(Color.purple)
+                    }
+                }
+                .font(.caption2.weight(.medium))
+                .labelStyle(SpeedLabelStyle())
+                .monospacedDigit()
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct SpeedLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 2) {
+            configuration.icon.imageScale(.small)
+            configuration.title
+        }
     }
 }
 

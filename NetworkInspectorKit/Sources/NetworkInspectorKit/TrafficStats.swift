@@ -15,6 +15,10 @@ public struct AppTrafficStats: Sendable, Identifiable, Hashable {
     public let rateWindow: TimeInterval
     /// Request counts per time bucket across the rate window, oldest first.
     public let activity: [Int]
+    /// Request body bytes sent inside the trailing rate window.
+    public let recentBytesSent: Int
+    /// Response body bytes received inside the trailing rate window.
+    public let recentBytesReceived: Int
 
     public var id: String { app.id }
 
@@ -28,7 +32,9 @@ public struct AppTrafficStats: Sendable, Identifiable, Hashable {
         lastActivity: Date,
         recentRequestCount: Int,
         rateWindow: TimeInterval,
-        activity: [Int]
+        activity: [Int],
+        recentBytesSent: Int = 0,
+        recentBytesReceived: Int = 0
     ) {
         self.app = app
         self.requestCount = requestCount
@@ -40,6 +46,8 @@ public struct AppTrafficStats: Sendable, Identifiable, Hashable {
         self.recentRequestCount = recentRequestCount
         self.rateWindow = rateWindow
         self.activity = activity
+        self.recentBytesSent = recentBytesSent
+        self.recentBytesReceived = recentBytesReceived
     }
 
     public var totalBytes: Int { bytesSent + bytesReceived }
@@ -54,6 +62,21 @@ public struct AppTrafficStats: Sendable, Identifiable, Hashable {
         rateWindow > 0 ? Double(recentRequestCount) * 60 / rateWindow : 0
     }
 
+    /// Current download speed: bytes received per second over the rate window.
+    public var downloadBytesPerSecond: Double {
+        rateWindow > 0 ? Double(recentBytesReceived) / rateWindow : 0
+    }
+
+    /// Current upload speed: bytes sent per second over the rate window.
+    public var uploadBytesPerSecond: Double {
+        rateWindow > 0 ? Double(recentBytesSent) / rateWindow : 0
+    }
+
+    /// Combined download and upload speed, in bytes per second.
+    public var totalBytesPerSecond: Double {
+        downloadBytesPerSecond + uploadBytesPerSecond
+    }
+
     /// Whether the app issued any request inside the trailing rate window.
     public var isActive: Bool { recentRequestCount > 0 }
 
@@ -64,6 +87,8 @@ public struct AppTrafficStats: Sendable, Identifiable, Hashable {
             StatHeadline(value: Formatting.rate(perMinute: requestsPerMinute), caption: "per min")
         case .requests:
             StatHeadline(value: "\(requestCount)", caption: requestCount == 1 ? "request" : "requests")
+        case .speed:
+            StatHeadline(value: Formatting.speed(bytesPerSecond: totalBytesPerSecond), caption: "down + up")
         case .data:
             StatHeadline(value: Formatting.byteSize(totalBytes), caption: "transferred")
         case .errors:
@@ -89,6 +114,7 @@ public struct StatHeadline: Sendable, Hashable {
 public enum AppStatsSortOrder: String, Sendable, CaseIterable, Identifiable {
     case activity
     case requests
+    case speed
     case data
     case errors
     case latency
@@ -100,6 +126,7 @@ public enum AppStatsSortOrder: String, Sendable, CaseIterable, Identifiable {
         switch self {
         case .activity: "Live"
         case .requests: "Requests"
+        case .speed: "Speed"
         case .data: "Data"
         case .errors: "Errors"
         case .latency: "Latency"
@@ -114,6 +141,7 @@ public enum AppStatsSortOrder: String, Sendable, CaseIterable, Identifiable {
         let primary: ComparisonResult = switch self {
         case .activity: Self.descending(lhs.recentRequestCount, rhs.recentRequestCount)
         case .requests: Self.descending(lhs.requestCount, rhs.requestCount)
+        case .speed: Self.descending(lhs.totalBytesPerSecond, rhs.totalBytesPerSecond)
         case .data: Self.descending(lhs.totalBytes, rhs.totalBytes)
         case .errors:
             lhs.errorRate == rhs.errorRate
@@ -153,6 +181,8 @@ public struct TrafficSummary: Sendable, Hashable {
     public let totalBytes: Int
     public let activeAppCount: Int
     public let requestsPerMinute: Double
+    public let downloadBytesPerSecond: Double
+    public let uploadBytesPerSecond: Double
     /// Element-wise sum of every app's activity buckets, oldest first.
     public let activity: [Int]
 
@@ -162,6 +192,8 @@ public struct TrafficSummary: Sendable, Hashable {
         totalBytes = stats.reduce(0) { $0 + $1.totalBytes }
         activeAppCount = stats.filter { $0.isActive }.count
         requestsPerMinute = stats.reduce(0) { $0 + $1.requestsPerMinute }
+        downloadBytesPerSecond = stats.reduce(0) { $0 + $1.downloadBytesPerSecond }
+        uploadBytesPerSecond = stats.reduce(0) { $0 + $1.uploadBytesPerSecond }
 
         let bucketCount = stats.map(\.activity.count).max() ?? 0
         var activity = Array(repeating: 0, count: bucketCount)
@@ -171,6 +203,8 @@ public struct TrafficSummary: Sendable, Hashable {
             }
         }
         self.activity = activity
+        self.recentBytesSent = recentBytesSent
+        self.recentBytesReceived = recentBytesReceived
     }
 
     public var errorRate: Double {
@@ -188,8 +222,9 @@ public enum TrafficStats {
     public static let defaultBucketCount = 20
 
     /// Aggregates entries into one `AppTrafficStats` per app (keyed by bundle
-    /// identifier), ordered by app name. Totals cover every entry; throughput
-    /// and activity only cover the trailing `rateWindow` ending at `now`.
+    /// identifier), ordered by app name. Totals cover every entry; throughput,
+    /// upload/download speed and activity only cover the trailing `rateWindow`
+    /// ending at `now`.
     public static func perApp(
         _ entries: [CapturedRequest],
         now: Date,
@@ -201,6 +236,7 @@ public enum TrafficStats {
         let stats = groups.values.compactMap { group -> AppTrafficStats? in
             guard let first = group.first else { return nil }
             let timestamps = group.map(\.timestamp)
+            let recent = group.filter { isInWindow($0.timestamp, now: now, window: rateWindow) }
             let totalDuration = group.reduce(0) { $0 + $1.durationSeconds }
             return AppTrafficStats(
                 app: first.app,
@@ -210,9 +246,11 @@ public enum TrafficStats {
                 bytesReceived: group.reduce(0) { $0 + $1.responseBodySize },
                 averageDurationSeconds: totalDuration / Double(group.count),
                 lastActivity: timestamps.max() ?? first.timestamp,
-                recentRequestCount: timestamps.filter { isInWindow($0, now: now, window: rateWindow) }.count,
+                recentRequestCount: recent.count,
                 rateWindow: rateWindow,
-                activity: activityBuckets(timestamps: timestamps, now: now, window: rateWindow, bucketCount: bucketCount)
+                activity: activityBuckets(timestamps: timestamps, now: now, window: rateWindow, bucketCount: bucketCount),
+                recentBytesSent: recent.reduce(0) { $0 + $1.requestBodySize },
+                recentBytesReceived: recent.reduce(0) { $0 + $1.responseBodySize }
             )
         }
         return stats.ranked(by: .name)
