@@ -1,0 +1,49 @@
+name: NetworkInspector
+options:
+  bundleIdPrefix: com.omarkar
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+
+packages:
+  NetworkInspectorKit:
+    path: NetworkInspectorKit
+
+targets:
+  NetworkInspector:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: NetworkInspector
+    dependencies:
+      - package: NetworkInspectorKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.omarkar.networkinspector
+        CODE_SIGN_STYLE: Automatic
+        # Set via the DEVELOPMENT_TEAM env var before running `xcodegen generate`,
+        # so a personal team ID is never committed. Simulator builds (including CI)
+        # do not sign, so an empty value here is harmless there.
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+        SWIFT_VERSION: 6.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_CFBundleDisplayName: Network Inspector
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+schemes:
+  NetworkInspector:
+    build:
+      targets:
+        NetworkInspector: all
+    run:
+      config: Debug
+    test:
+      config: Debug

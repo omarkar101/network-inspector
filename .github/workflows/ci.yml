@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Select destination and build the app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project NetworkInspector.xcodeproj \
+            -scheme NetworkInspector \
+            -destination "generic/platform=iOS Simulator" \
+            build
+
+      - name: Run NetworkInspectorKit tests
+        run: |
+          cd NetworkInspectorKit
+          swift test
