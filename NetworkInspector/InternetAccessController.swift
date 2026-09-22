@@ -3,13 +3,8 @@ import Observation
 @preconcurrency import NetworkExtension
 import NetworkInspectorKit
 
-/// Owns the list of apps with internet access turned off and pushes it to the
-/// system content filter (the `NetworkInspectorFilterData` extension).
-///
-/// iOS only runs third-party content filters on supervised devices, Screen
-/// Time child devices, or development-signed builds, and the Network
-/// Extension capability needs a paid developer account. When the filter
-/// can't be installed, the list is still kept and `filterState` says why.
+/// Keeps the list of blocked apps and sends it to the content filter.
+/// `filterState` says whether the filter is actually running.
 @MainActor
 @Observable
 final class InternetAccessController {
