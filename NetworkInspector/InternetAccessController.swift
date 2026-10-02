@@ -103,6 +103,10 @@ final class InternetAccessController {
     }
 
     private func readState() async {
+        guard Self.isFilterBundled else {
+            filterState = .failed(Self.filterMissingMessage)
+            return
+        }
         let manager = NEFilterManager.shared()
         do {
             try await load(manager)
@@ -131,6 +135,10 @@ final class InternetAccessController {
     /// otherwise. The first save shows the system "Filter Network Content"
     /// permission prompt.
     private func sync() async {
+        guard Self.isFilterBundled else {
+            filterState = .failed(Self.filterMissingMessage)
+            return
+        }
         let manager = NEFilterManager.shared()
         do {
             try await load(manager)
@@ -177,6 +185,21 @@ final class InternetAccessController {
             }
         }
     }
+
+    /// Whether this build embeds the filter extension. Builds from
+    /// `project.personal.yml` (free Apple ID) leave it and the Network
+    /// Extension entitlement out, and iOS then refuses to save a filter with
+    /// a "permission denied" error that isn't about the user's choice.
+    private static let isFilterBundled: Bool = {
+        guard let plugIns = Bundle.main.builtInPlugInsURL else { return false }
+        let appex = plugIns.appendingPathComponent("NetworkInspectorFilterData.appex")
+        return FileManager.default.fileExists(atPath: appex.path)
+    }()
+
+    private static let filterMissingMessage = "This build doesn't include the content filter, "
+        + "so it can't capture traffic or turn apps' internet off. Free Apple ID builds "
+        + "(project.personal.yml) can't include it; build from project.yml with a paid "
+        + "Apple Developer Program team."
 
     private static func describe(_ error: any Error) -> String {
         let nsError = error as NSError

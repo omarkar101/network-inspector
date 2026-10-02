@@ -262,7 +262,8 @@ succeed for the **App Groups** capability on `NetworkInspector` and
 `group.com.omarkar.networkinspector`; if it can't, add the group in the
 developer portal and enable it for both App IDs). In the simulator, **Start
 Capturing** should end in "Capture Unavailable" with a **Show Demo Traffic**
-button.
+button. In a free Apple ID build (`project.personal.yml`) it should say the
+build doesn't include the content filter, without any permission prompt.
 
 1. Launch the app. The dashboard should say "See Which Apps Use the Network"
    with a **Start Capturing** button, and no made-up apps (Courier, Frame…).
