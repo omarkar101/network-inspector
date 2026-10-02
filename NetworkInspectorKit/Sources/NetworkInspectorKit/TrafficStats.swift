@@ -1,5 +1,45 @@
 import Foundation
 
+/// Something that can be aggregated into per-app traffic statistics: a
+/// simulated HTTP request, or a connection captured on the device.
+public protocol TrafficEntry: Sendable {
+    var app: SourceApp { get }
+    /// When the entry started. Drives throughput and the activity sparkline.
+    var timestamp: Date { get }
+    /// When the entry's bytes were counted. Drives upload and download speed.
+    var transferTimestamp: Date { get }
+    var bytesSent: Int { get }
+    var bytesReceived: Int { get }
+    /// How long the entry took, or nil when that isn't known (yet).
+    var measuredDurationSeconds: Double? { get }
+    /// Whether it failed or, for a connection, was blocked.
+    var isFailure: Bool { get }
+}
+
+extension CapturedRequest: TrafficEntry {
+    public var transferTimestamp: Date { timestamp }
+    public var bytesSent: Int { requestBodySize }
+    public var bytesReceived: Int { responseBodySize }
+    public var measuredDurationSeconds: Double? { durationSeconds }
+}
+
+/// What the entries behind a set of stats are, which decides how the
+/// dashboard words them.
+public enum TrafficKind: Sendable, Hashable {
+    /// Simulated HTTP requests (demo mode).
+    case requests
+    /// Connections captured on the device by the content filter.
+    case connections
+
+    /// The entry noun for a count, e.g. "1 request" or "3 connections".
+    public func noun(count: Int) -> String {
+        switch self {
+        case .requests: count == 1 ? "request" : "requests"
+        case .connections: count == 1 ? "connection" : "connections"
+        }
+    }
+}
+
 /// Aggregated, point-in-time traffic statistics for a single app.
 public struct AppTrafficStats: Sendable, Identifiable, Hashable {
     public let app: SourceApp
@@ -81,20 +121,23 @@ public struct AppTrafficStats: Sendable, Identifiable, Hashable {
     public var isActive: Bool { recentRequestCount > 0 }
 
     /// The value to feature for this app when the list is ranked by `order`.
-    public func headline(for order: AppStatsSortOrder) -> StatHeadline {
+    public func headline(for order: AppStatsSortOrder, kind: TrafficKind = .requests) -> StatHeadline {
         switch order {
         case .activity, .name:
             StatHeadline(value: Formatting.rate(perMinute: requestsPerMinute), caption: "per min")
         case .requests:
-            StatHeadline(value: "\(requestCount)", caption: requestCount == 1 ? "request" : "requests")
+            StatHeadline(value: "\(requestCount)", caption: kind.noun(count: requestCount))
         case .speed:
             StatHeadline(value: Formatting.speed(bytesPerSecond: totalBytesPerSecond), caption: "down + up")
         case .data:
             StatHeadline(value: Formatting.byteSize(totalBytes), caption: "transferred")
         case .errors:
-            StatHeadline(value: Formatting.percent(errorRate), caption: "errors")
+            StatHeadline(value: Formatting.percent(errorRate), caption: kind == .requests ? "errors" : "blocked")
         case .latency:
-            StatHeadline(value: Formatting.duration(seconds: averageDurationSeconds), caption: "avg latency")
+            StatHeadline(
+                value: Formatting.duration(seconds: averageDurationSeconds),
+                caption: kind == .requests ? "avg latency" : "avg duration"
+            )
         }
     }
 }
@@ -123,14 +166,22 @@ public enum AppStatsSortOrder: String, Sendable, CaseIterable, Identifiable {
     public var id: String { rawValue }
 
     public var label: String {
-        switch self {
-        case .activity: "Live"
-        case .requests: "Requests"
-        case .speed: "Speed"
-        case .data: "Data"
-        case .errors: "Errors"
-        case .latency: "Latency"
-        case .name: "Name"
+        label(for: .requests)
+    }
+
+    /// The order's name, worded for what the entries are.
+    public func label(for kind: TrafficKind) -> String {
+        switch (self, kind) {
+        case (.activity, _): "Live"
+        case (.requests, .requests): "Requests"
+        case (.requests, .connections): "Connections"
+        case (.speed, _): "Speed"
+        case (.data, _): "Data"
+        case (.errors, .requests): "Errors"
+        case (.errors, .connections): "Blocked"
+        case (.latency, .requests): "Latency"
+        case (.latency, .connections): "Duration"
+        case (.name, _): "Name"
         }
     }
 
@@ -222,9 +273,10 @@ public enum TrafficStats {
     /// Aggregates entries into one `AppTrafficStats` per app (keyed by bundle
     /// identifier), ordered by app name. Totals cover every entry; throughput,
     /// upload/download speed and activity only cover the trailing `rateWindow`
-    /// ending at `now`.
-    public static func perApp(
-        _ entries: [CapturedRequest],
+    /// ending at `now`. Average duration only covers entries whose duration
+    /// is known.
+    public static func perApp<Entry: TrafficEntry>(
+        _ entries: [Entry],
         now: Date,
         rateWindow: TimeInterval = defaultRateWindow,
         bucketCount: Int = defaultBucketCount
@@ -235,20 +287,22 @@ public enum TrafficStats {
             guard let first = group.first else { return nil }
             let timestamps = group.map(\.timestamp)
             let recent = group.filter { isInWindow($0.timestamp, now: now, window: rateWindow) }
-            let totalDuration = group.reduce(0) { $0 + $1.durationSeconds }
+            let transferred = group.filter { isInWindow($0.transferTimestamp, now: now, window: rateWindow) }
+            let durations = group.compactMap(\.measuredDurationSeconds)
+            let totalDuration = durations.reduce(0, +)
             return AppTrafficStats(
                 app: first.app,
                 requestCount: group.count,
                 failureCount: group.filter { $0.isFailure }.count,
-                bytesSent: group.reduce(0) { $0 + $1.requestBodySize },
-                bytesReceived: group.reduce(0) { $0 + $1.responseBodySize },
-                averageDurationSeconds: totalDuration / Double(group.count),
+                bytesSent: group.reduce(0) { $0 + $1.bytesSent },
+                bytesReceived: group.reduce(0) { $0 + $1.bytesReceived },
+                averageDurationSeconds: durations.isEmpty ? 0 : totalDuration / Double(durations.count),
                 lastActivity: timestamps.max() ?? first.timestamp,
                 recentRequestCount: recent.count,
                 rateWindow: rateWindow,
                 activity: activityBuckets(timestamps: timestamps, now: now, window: rateWindow, bucketCount: bucketCount),
-                recentBytesSent: recent.reduce(0) { $0 + $1.requestBodySize },
-                recentBytesReceived: recent.reduce(0) { $0 + $1.responseBodySize }
+                recentBytesSent: transferred.reduce(0) { $0 + $1.bytesSent },
+                recentBytesReceived: transferred.reduce(0) { $0 + $1.bytesReceived }
             )
         }
         return stats.ranked(by: .name)
@@ -282,7 +336,7 @@ public enum TrafficStats {
     }
 }
 
-extension Sequence<CapturedRequest> {
+extension Sequence where Element: TrafficEntry {
     /// Per-app statistics for these entries; see `TrafficStats.perApp`.
     public func appStats(
         now: Date,

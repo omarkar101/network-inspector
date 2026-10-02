@@ -85,7 +85,7 @@ struct TrafficStatsTests {
 
     @Test("empty input yields no stats")
     func emptyInput() {
-        #expect(TrafficStats.perApp([], now: now).isEmpty)
+        #expect(TrafficStats.perApp([CapturedRequest](), now: now).isEmpty)
         #expect(TrafficSummary(stats: []).totalRequests == 0)
         #expect(TrafficSummary(stats: []).errorRate == 0)
     }
@@ -236,11 +236,20 @@ struct TrafficStatsTests {
         #expect(order.ranks(a, before: b) != order.ranks(b, before: a))
     }
 
-    @Test("every sort order has a distinct label")
-    func sortLabels() {
-        let labels = AppStatsSortOrder.allCases.map(\.label)
+    @Test("every sort order has a distinct label", arguments: [TrafficKind.requests, .connections])
+    func sortLabels(kind: TrafficKind) {
+        let labels = AppStatsSortOrder.allCases.map { $0.label(for: kind) }
         #expect(Set(labels).count == labels.count)
         #expect(labels.allSatisfy { !$0.isEmpty })
+    }
+
+    @Test("labels are worded for connections")
+    func connectionLabels() {
+        #expect(AppStatsSortOrder.requests.label == "Requests")
+        #expect(AppStatsSortOrder.requests.label(for: .connections) == "Connections")
+        #expect(AppStatsSortOrder.errors.label(for: .connections) == "Blocked")
+        #expect(AppStatsSortOrder.latency.label(for: .connections) == "Duration")
+        #expect(AppStatsSortOrder.speed.label(for: .connections) == "Speed")
     }
 
     // MARK: Headlines & summary
@@ -268,6 +277,11 @@ struct TrafficStatsTests {
         #expect(s.headline(for: .errors) == StatHeadline(value: "13%", caption: "errors"))
         #expect(s.headline(for: .latency) == StatHeadline(value: "250 ms", caption: "avg latency"))
         #expect(stats(alpha, requests: 1).headline(for: .requests).caption == "request")
+
+        #expect(s.headline(for: .requests, kind: .connections) == StatHeadline(value: "40", caption: "connections"))
+        #expect(s.headline(for: .errors, kind: .connections) == StatHeadline(value: "13%", caption: "blocked"))
+        #expect(s.headline(for: .latency, kind: .connections) == StatHeadline(value: "250 ms", caption: "avg duration"))
+        #expect(stats(alpha, requests: 1).headline(for: .requests, kind: .connections).caption == "connection")
     }
 
     @Test("summary totals every app and sums activity")

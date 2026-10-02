@@ -1,19 +1,25 @@
 # CLAUDE.md
 
-SwiftUI iOS app for browsing captured HTTP request/response traffic. See
+SwiftUI iOS app that shows which apps on the iPhone use the network, by app
+name, and can cut apps off. See
 `README.md` for full setup, build and device-install steps.
 
 ## Layout
 
 - `NetworkInspectorKit/` — Swift Package with all logic (models, status
-  classification, formatting, search/filtering) and its Swift Testing suite.
-  No UIKit/SwiftUI imports, so it stays buildable and testable on Linux.
+  classification, formatting, search/filtering, capture journal, app naming)
+  and its Swift Testing suite. No UIKit/SwiftUI imports, so it stays
+  buildable and testable on Linux.
 - `NetworkInspector/` — thin SwiftUI app target that imports the package.
 - `NetworkInspectorFilterData/`, `NetworkInspectorFilterControl/` — Network
-  Extension content filter extensions that cut blocked apps off the network
-  (per-app "turn internet off"). Needs the `content-filter-provider`
-  entitlement, i.e. a paid team; only runs in dev-signed builds or on
-  supervised devices.
+  Extension content filter extensions. They cut blocked apps off the network
+  (per-app "turn internet off") and capture real traffic by app: the data
+  provider marks flows for reporting, the control provider appends the
+  reports to `FlowJournal` in the app group `group.com.omarkar.networkinspector`,
+  and the app reads it. Needs the `content-filter-provider` entitlement,
+  i.e. a paid team; only runs in dev-signed builds or on supervised devices.
+- The dashboard shows device traffic by default; the simulated
+  `LiveTrafficGenerator` feed is only a demo mode (Options ▸ Show Demo Traffic).
 - `project.yml` — XcodeGen spec. The `.xcodeproj` is generated, never committed.
 - `.github/workflows/ci.yml` — macOS runner: `xcodegen generate`, simulator
   build, `swift test` in the package. Runs on pushes to `master` and on PRs.

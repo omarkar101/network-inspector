@@ -8,12 +8,30 @@ extension SourceApp {
     }
 }
 
-/// A rounded, gradient app glyph.
+/// The app's real icon when its App Store listing is known, otherwise a
+/// rounded, gradient glyph.
 struct AppIcon: View {
     let app: SourceApp
     var size: CGFloat = 40
 
     var body: some View {
+        if let iconURL = app.iconURL {
+            AsyncImage(url: iconURL) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                glyph
+            }
+            .frame(width: size, height: size)
+            .clipShape(.rect(cornerRadius: size * 0.22))
+            .accessibilityHidden(true)
+        } else {
+            glyph
+        }
+    }
+
+    private var glyph: some View {
         Image(systemName: app.symbolName)
             .font(.system(size: size * 0.45, weight: .semibold))
             .foregroundStyle(.white)
@@ -100,6 +118,26 @@ extension HTTPStatusClass {
         case .clientError: .orange
         case .serverError: .red
         case .unknown: .gray
+        }
+    }
+}
+
+extension ConnectionState {
+    var tint: Color {
+        switch self {
+        case .open: .green
+        case .closed: .gray
+        case .blocked: .red
+        }
+    }
+}
+
+extension FlowEvent.Transport {
+    var tint: Color {
+        switch self {
+        case .tcp: .blue
+        case .udp: .teal
+        case .other: .gray
         }
     }
 }

@@ -3,8 +3,9 @@ import Observation
 @preconcurrency import NetworkExtension
 import NetworkInspectorKit
 
-/// Keeps the list of blocked apps and sends it to the content filter.
-/// `filterState` says whether the filter is actually running.
+/// Manages the content filter: keeps the list of blocked apps and whether
+/// traffic capture is on, and sends both to the filter. `filterState` says
+/// whether the filter is actually running.
 @MainActor
 @Observable
 final class InternetAccessController {
@@ -16,12 +17,16 @@ final class InternetAccessController {
     }
 
     private(set) var blocklist: AppBlocklist
+    /// Whether the filter should report every connection, so the dashboard
+    /// can list real traffic by app.
+    private(set) var capturesTraffic: Bool
     private(set) var filterState: FilterState = .unknown
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var pendingSync: Task<Void, Never>?
 
     private static let defaultsKey = "blockedApps"
+    private static let capturesTrafficKey = "capturesTraffic"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -31,6 +36,7 @@ final class InternetAccessController {
         } else {
             blocklist = AppBlocklist()
         }
+        capturesTraffic = defaults.bool(forKey: Self.capturesTrafficKey)
     }
 
     func isBlocked(_ app: SourceApp) -> Bool {
@@ -43,6 +49,20 @@ final class InternetAccessController {
     /// app's internet is off unless this is true.
     var isFilterActive: Bool {
         filterState == .on
+    }
+
+    /// Whether connections are being captured right now.
+    var isCapturing: Bool {
+        capturesTraffic && isFilterActive
+    }
+
+    /// Whether the filter has anything to do: capture is on or an app is blocked.
+    var needsFilter: Bool {
+        settings.needsFilter
+    }
+
+    private var settings: FilterSettings {
+        FilterSettings(blocklist: blocklist, capturesTraffic: capturesTraffic)
     }
 
     func canBlock(_ app: SourceApp) -> Bool {
@@ -58,6 +78,15 @@ final class InternetAccessController {
         if let data = try? JSONEncoder().encode(blocklist) {
             defaults.set(data, forKey: Self.defaultsKey)
         }
+        scheduleSync()
+    }
+
+    /// Starts or stops capturing every connection, turning the filter on or
+    /// off as needed. The first start shows the system permission prompt.
+    func setCapturesTraffic(_ enabled: Bool) {
+        guard enabled != capturesTraffic else { return }
+        capturesTraffic = enabled
+        defaults.set(enabled, forKey: Self.capturesTrafficKey)
         scheduleSync()
     }
 
@@ -97,24 +126,26 @@ final class InternetAccessController {
         }
     }
 
-    /// Saves the current list into the filter configuration, enabling the
-    /// filter while any app is blocked and disabling it otherwise. The first
-    /// save shows the system "Filter Network Content" permission prompt.
+    /// Saves the current settings into the filter configuration, enabling
+    /// the filter while capture is on or any app is blocked and disabling it
+    /// otherwise. The first save shows the system "Filter Network Content"
+    /// permission prompt.
     private func sync() async {
         let manager = NEFilterManager.shared()
         do {
             try await load(manager)
-            if blocklist.isEmpty && manager.providerConfiguration == nil {
+            let settings = self.settings
+            if !settings.needsFilter && manager.providerConfiguration == nil {
                 filterState = .off
                 return
             }
 
             let configuration = manager.providerConfiguration ?? NEFilterProviderConfiguration()
             configuration.filterSockets = true
-            configuration.vendorConfiguration = blocklist.vendorConfiguration
+            configuration.vendorConfiguration = settings.vendorConfiguration
             manager.providerConfiguration = configuration
             manager.localizedDescription = "Network Inspector"
-            manager.isEnabled = !blocklist.isEmpty
+            manager.isEnabled = settings.needsFilter
 
             try await save(manager)
             filterState = manager.isEnabled ? .on : .off

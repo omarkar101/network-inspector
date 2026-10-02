@@ -31,7 +31,8 @@ targets:
       - path: NetworkInspector
     dependencies:
       - package: NetworkInspectorKit
-      # Content filter extensions that cut selected apps off from the network.
+      # Content filter extensions that cut selected apps off from the network
+      # and capture every connection by app.
       - target: NetworkInspectorFilterData
       - target: NetworkInspectorFilterControl
     settings:
@@ -69,6 +70,8 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: NetworkInspectorFilterControl
+    dependencies:
+      - package: NetworkInspectorKit
     settings:
       groups: [shared]
       base:

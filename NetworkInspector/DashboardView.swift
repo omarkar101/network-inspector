@@ -11,13 +11,14 @@ struct AppStatsDashboardView: View {
 
     var body: some View {
         let ranked = model.rankedStats
+        let kind = model.kind
 
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    SummaryGrid(summary: model.summary)
+                    SummaryGrid(summary: model.summary, kind: kind)
 
-                    SortBar(selection: $model.sortOrder)
+                    SortBar(selection: $model.sortOrder, kind: kind)
 
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(title: "Apps", detail: "\(ranked.count) tracked")
@@ -29,6 +30,7 @@ struct AppStatsDashboardView: View {
                                         rank: index + 1,
                                         stats: stats,
                                         sortOrder: model.sortOrder,
+                                        kind: kind,
                                         share: model.summary.share(of: stats),
                                         isInternetBlocked: internetAccess.isBlocked(stats.app),
                                         isFilterActive: internetAccess.isFilterActive
@@ -50,16 +52,23 @@ struct AppStatsDashboardView: View {
             .background(DashboardBackground())
             .overlay {
                 if ranked.isEmpty {
-                    ContentUnavailableView(
-                        "No Traffic Yet",
-                        systemImage: "antenna.radiowaves.left.and.right",
-                        description: Text("Requests will appear here as apps talk to the network.")
-                    )
+                    switch model.source {
+                    case .device:
+                        CaptureStatusView(controller: internetAccess) {
+                            model.setSource(.demo)
+                        }
+                    case .demo:
+                        ContentUnavailableView(
+                            "No Traffic Yet",
+                            systemImage: "antenna.radiowaves.left.and.right",
+                            description: Text("Requests will appear here as apps talk to the network.")
+                        )
+                    }
                 }
             }
             .navigationTitle("Live Traffic")
             .navigationDestination(for: SourceApp.self) { app in
-                RequestListView(title: app.displayName, entries: model.entries(for: app), showsApp: false)
+                AppTrafficList(model: model, app: app)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             InternetAccessToggle(controller: internetAccess, app: app)
@@ -71,11 +80,21 @@ struct AppStatsDashboardView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    LiveIndicator(isLive: model.isLive)
+                    LiveIndicator(status: feedStatus)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button(model.isLive ? "Pause Capture" : "Resume Capture",
+                        if model.source == .device {
+                            Button(internetAccess.capturesTraffic ? "Stop Capturing" : "Start Capturing",
+                                   systemImage: internetAccess.capturesTraffic ? "stop.circle" : "record.circle") {
+                                internetAccess.setCapturesTraffic(!internetAccess.capturesTraffic)
+                            }
+                        }
+                        Button(model.source == .demo ? "Show Device Traffic" : "Show Demo Traffic",
+                               systemImage: model.source == .demo ? "iphone" : "wand.and.stars") {
+                            model.setSource(model.source == .demo ? .device : .demo)
+                        }
+                        Button(model.isLive ? "Pause Updates" : "Resume Updates",
                                systemImage: model.isLive ? "pause.fill" : "play.fill") {
                             model.isLive.toggle()
                         }
@@ -92,12 +111,91 @@ struct AppStatsDashboardView: View {
             }
         }
     }
+
+    private var feedStatus: FeedStatus {
+        if !model.isLive { return .paused }
+        if model.source == .demo { return .demo }
+        return internetAccess.isCapturing ? .live : .off
+    }
+}
+
+/// One app's traffic: its captured connections, or its requests in demo mode.
+private struct AppTrafficList: View {
+    let model: LiveTrafficModel
+    let app: SourceApp
+
+    var body: some View {
+        let title = model.current(app).displayName
+        switch model.source {
+        case .device:
+            ConnectionListView(title: title, connections: model.connections(for: app), showsApp: false)
+        case .demo:
+            RequestListView(title: title, entries: model.requests(for: app), showsApp: false)
+        }
+    }
+}
+
+// MARK: - Capture
+
+/// What the dashboard shows before any real traffic arrives: how to start
+/// capturing, why capture isn't running, or that it's waiting for traffic.
+private struct CaptureStatusView: View {
+    let controller: InternetAccessController
+    let showDemo: () -> Void
+
+    var body: some View {
+        if !controller.capturesTraffic {
+            ContentUnavailableView {
+                Label("See Which Apps Use the Network", systemImage: "antenna.radiowaves.left.and.right")
+            } description: {
+                Text("Capture lists every connection apps like WhatsApp or Safari make, by app. "
+                    + "It runs as a content filter, so iOS asks for permission first.")
+            } actions: {
+                Button("Start Capturing") {
+                    controller.setCapturesTraffic(true)
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Show Demo Traffic", action: showDemo)
+            }
+        } else {
+            switch controller.filterState {
+            case .unknown:
+                ContentUnavailableView("Starting Capture…", systemImage: "hourglass")
+            case .on:
+                ContentUnavailableView(
+                    "Waiting for Traffic",
+                    systemImage: "antenna.radiowaves.left.and.right",
+                    description: Text("Use any app and its connections show up here.")
+                )
+            case .off:
+                ContentUnavailableView {
+                    Label("Capture Is Off", systemImage: "shield.slash")
+                } description: {
+                    Text("The content filter isn't running. It may have been turned off in "
+                        + "Settings ▸ General ▸ VPN & Device Management.")
+                } actions: {
+                    Button("Turn On Filter", action: controller.retry)
+                        .buttonStyle(.borderedProminent)
+                }
+            case .failed(let message):
+                ContentUnavailableView {
+                    Label("Capture Unavailable", systemImage: "exclamationmark.shield.fill")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Try Again", action: controller.retry)
+                    Button("Show Demo Traffic", action: showDemo)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Summary
 
 private struct SummaryGrid: View {
     let summary: TrafficSummary
+    let kind: TrafficKind
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -135,9 +233,9 @@ private struct SummaryGrid: View {
                 tint: .mint
             )
             StatTile(
-                title: "Error Rate",
+                title: kind == .connections ? "Blocked" : "Error Rate",
                 value: Formatting.percent(summary.errorRate),
-                systemImage: "exclamationmark.triangle.fill",
+                systemImage: kind == .connections ? "hand.raised.fill" : "exclamationmark.triangle.fill",
                 tint: summary.errorRate > 0.05 ? .red : .orange
             )
         }
@@ -192,6 +290,7 @@ private struct StatTile: View {
 
 private struct SortBar: View {
     @Binding var selection: AppStatsSortOrder
+    let kind: TrafficKind
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -204,7 +303,7 @@ private struct SortBar: View {
                                 selection = order
                             }
                         } label: {
-                            Label(order.label, systemImage: order.systemImage)
+                            Label(order.label(for: kind), systemImage: order.systemImage)
                                 .font(.subheadline.weight(isSelected ? .semibold : .regular))
                                 .foregroundStyle(isSelected ? Color.white : Color.primary)
                                 .padding(.horizontal, 14)
@@ -247,6 +346,7 @@ private struct AppStatsRow: View {
     let rank: Int
     let stats: AppTrafficStats
     let sortOrder: AppStatsSortOrder
+    let kind: TrafficKind
     let share: Double
     let isInternetBlocked: Bool
     let isFilterActive: Bool
@@ -254,7 +354,7 @@ private struct AppStatsRow: View {
     private var tint: Color { stats.app.tint }
 
     var body: some View {
-        let headline = stats.headline(for: sortOrder)
+        let headline = stats.headline(for: sortOrder, kind: kind)
 
         HStack(spacing: 12) {
             Text("\(rank)")
@@ -386,15 +486,53 @@ private struct SectionHeader: View {
     }
 }
 
+/// Where the dashboard's traffic is coming from right now.
+private enum FeedStatus {
+    /// Capturing real traffic on the device.
+    case live
+    /// Showing simulated traffic.
+    case demo
+    /// Updates paused by the user.
+    case paused
+    /// Showing device traffic, but capture isn't running.
+    case off
+
+    var title: String {
+        switch self {
+        case .live: "Live"
+        case .demo: "Demo"
+        case .paused: "Paused"
+        case .off: "Not Capturing"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .live: "dot.radiowaves.left.and.right"
+        case .demo: "wand.and.stars"
+        case .paused: "pause.circle.fill"
+        case .off: "antenna.radiowaves.left.and.right.slash"
+        }
+    }
+
+    var tint: AnyShapeStyle {
+        switch self {
+        case .live: AnyShapeStyle(Color.green)
+        case .demo: AnyShapeStyle(Color.orange)
+        case .paused, .off: AnyShapeStyle(HierarchicalShapeStyle.secondary)
+        }
+    }
+}
+
 private struct LiveIndicator: View {
-    let isLive: Bool
+    let status: FeedStatus
 
     var body: some View {
-        Label(isLive ? "Live" : "Paused", systemImage: isLive ? "dot.radiowaves.left.and.right" : "pause.circle.fill")
+        Label(status.title, systemImage: status.systemImage)
             .labelStyle(.titleAndIcon)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(isLive ? AnyShapeStyle(Color.green) : AnyShapeStyle(HierarchicalShapeStyle.secondary))
-            .symbolEffect(.variableColor.iterative, isActive: isLive)
+            .foregroundStyle(status.tint)
+            .symbolEffect(.variableColor.iterative, isActive: status == .live)
             .contentTransition(.symbolEffect(.replace))
             .padding(.horizontal, 8)
     }
@@ -413,5 +551,5 @@ private struct DashboardBackground: View {
 }
 
 #Preview {
-    AppStatsDashboardView(model: LiveTrafficModel(seed: 42), internetAccess: InternetAccessController())
+    AppStatsDashboardView(model: LiveTrafficModel(seed: 42, source: .demo), internetAccess: InternetAccessController())
 }
