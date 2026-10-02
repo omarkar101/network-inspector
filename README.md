@@ -159,9 +159,11 @@ project.yml                  XcodeGen spec that wires the app target to the loca
 A free Apple ID is enough to run the app on your own device. Builds signed this
 way expire after 7 days and must be re-installed from Xcode. Turning off an
 app's internet access and seeing real traffic by app both need a paid team
-(see above); with a free team, remove the two filter extensions from the app
-target's dependencies in `project.yml` and the `NetworkInspector.entitlements`
-setting to sign. The app then only shows demo traffic.
+(see above). With a free team, generate from `project.personal.yml` instead,
+which leaves out the two filter extensions and the app's entitlements
+(step 3); the app then only shows demo traffic. Otherwise signing fails with
+"Personal development teams … do not support the Network Extensions
+capability".
 
 1. **Add your Apple ID** — Xcode ▸ Settings ▸ Accounts ▸ `+` ▸ Apple ID.
 2. **Find your team ID** — Xcode's Accounts pane lists your personal team as
@@ -175,7 +177,8 @@ setting to sign. The app then only shows demo traffic.
 3. **Generate the project with your team:**
    ```sh
    export DEVELOPMENT_TEAM=A1B2C3D4E5   # your ID from step 2
-   xcodegen generate
+   xcodegen generate --spec project.personal.yml   # free team
+   # xcodegen generate                             # paid team
    open NetworkInspector.xcodeproj
    ```
    Keeping this in an env var means no personal team ID is committed.
