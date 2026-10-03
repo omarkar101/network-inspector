@@ -22,7 +22,7 @@ struct InternetAccessView: View {
                 Section {
                     FilterStatusRow(
                         state: controller.filterState,
-                        hasBlockedApps: !controller.blocklist.isEmpty,
+                        isNeeded: controller.needsFilter,
                         retry: controller.retry
                     )
                 } footer: {
@@ -92,7 +92,8 @@ struct InternetAccessView: View {
 
 private struct FilterStatusRow: View {
     let state: InternetAccessController.FilterState
-    let hasBlockedApps: Bool
+    /// Whether the filter should be running (an app is blocked or capture is on).
+    let isNeeded: Bool
     let retry: () -> Void
 
     var body: some View {
@@ -104,7 +105,7 @@ private struct FilterStatusRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Filter off", systemImage: "shield.slash")
                     .foregroundStyle(.secondary)
-                if hasBlockedApps {
+                if isNeeded {
                     Button("Turn On Filter", action: retry)
                         .font(.footnote.weight(.semibold))
                 }

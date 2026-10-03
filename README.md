@@ -1,34 +1,90 @@
 # Network Inspector
 
-A SwiftUI iOS app scaffold for browsing captured HTTP request/response traffic.
+A SwiftUI iOS app that shows which apps on the iPhone use the network (for
+example WhatsApp, Safari or Instagram), what they connect to, and how much
+data they move. It can also cut any app off from the internet.
 
 The project is split in two:
 
 - **`NetworkInspectorKit`** — a Swift Package containing all of the real logic
-  (models, status-code classification, formatting, search/filtering, per-app
-  traffic aggregation and ranking, and a seeded live-traffic generator). It has
-  no UIKit/SwiftUI dependency, so it builds and its test suite runs on Linux as
-  well as macOS.
+  (models, the capture journal, app naming, status-code classification,
+  formatting, search/filtering, per-app traffic aggregation and ranking, and
+  a seeded demo-traffic generator). It has no UIKit/SwiftUI dependency, so it
+  builds and its test suite runs on Linux as well as macOS.
 - **`NetworkInspector`** — a thin SwiftUI app target (app lifecycle, views,
   assets) that imports `NetworkInspectorKit`. It has two tabs:
   - **Apps** — a live dashboard with totals (throughput, active apps,
-    download and upload speed, data, error rate) and a ranked list of apps
-    with sparklines and live ↓/↑ speeds. The list can be sorted by live
-    activity, requests, speed, data, errors, latency or name, and reorders as
-    traffic arrives. Tap an app to see its requests.
-  - **Requests** — a searchable, status-filterable list of every request,
-    with each one's download (and upload) speed.
+    download and upload speed, data, blocked share) and a ranked list of
+    apps, by name and icon, with sparklines and live ↓/↑ speeds. The list
+    can be sorted by live activity, connections, speed, data, blocked,
+    duration or name, and reorders as traffic arrives. Tap an app to see its
+    connections.
+  - **Connections** — a searchable list of every connection captured on the
+    device: app, remote host and port, TCP/UDP, open/closed/blocked, how long
+    it lasted and the bytes it moved.
 
   Sizes are always shown starting at KB, stepping up to MB then GB
   (e.g. "0.5 KB", "850 KB", "2.4 MB", "1.1 GB"); speeds use the same units
   per second.
 
-  Traffic is simulated by `LiveTrafficGenerator` until real capture exists.
+  *Options ▸ Show Demo Traffic* switches to a simulated feed of made-up apps
+  (`LiveTrafficGenerator`). There the second tab lists HTTP requests instead.
+
+## Seeing which apps use the network
+
+iOS doesn't let an app watch other apps' traffic. The one public API that
+says which app opened a connection is a Network Extension **content filter**,
+the same one used to turn apps' internet off (see below), so capture has the
+same requirements: a paid developer team and a development-signed build on a
+physical iPhone (or a supervised device). It doesn't work in the simulator.
+
+Tap **Start Capturing** on the dashboard (or *Options ▸ Start Capturing*) and
+allow the "Filter Network Content" prompt. From then on:
+
+1. The `NetworkInspectorFilterData` extension sees each new connection and
+   asks the system to report it, both when it opens and when it closes.
+   Its sandbox can't write anywhere, so it can't pass flows on by itself.
+2. The system delivers the reports to the `NetworkInspectorFilterControl`
+   extension, which appends them to a journal file (`FlowJournal`) in the
+   app group container `group.com.omarkar.networkinspector`.
+3. The app follows that file and assembles the events into connections
+   (`ConnectionLog`).
+
+The filter keeps running while the app is closed, so traffic from then shows
+up the next time the app opens. The journal keeps the most recent few MB.
+
+What is and isn't visible:
+
+- Every connection's app, remote host (the hostname when the app connected
+  by name, otherwise the IP address), port, protocol, and open and close
+  times.
+- Bytes sent and received, but only once a connection **closes**. Long-lived
+  connections, such as a messenger's chat socket, show their data when they
+  end.
+- No URLs, paths, HTTP methods, status codes or content. Almost all traffic
+  is encrypted, and the filter only sees connections.
+- Some traffic is made by iOS on an app's behalf and shows up under a system
+  service, e.g. "Background Transfers" or "Push Notifications".
+
+Apps are named, in order of preference, from:
+
+1. A built-in list of popular apps and iOS services (`KnownApps`), e.g.
+   `net.whatsapp.WhatsApp` → "WhatsApp".
+2. The App Store. The app asks Apple's iTunes Lookup API for the name and
+   icon of each app it sees (sending only the bundle ID), one at a time, and
+   caches the answers. Apple's built-in apps aren't looked up.
+3. The bundle ID itself, e.g. `com.example.coolgame.ios` → "Coolgame".
+
+App extensions are named after their app, e.g. "WhatsApp (ServiceExtension)".
+
+If you change the bundle ID prefix, also change the app group in
+`FlowJournal.appGroupIdentifier` and in the app and filter control
+entitlements.
 
 ## Turning off an app's internet access
 
 Any app can be cut off from the network (Wi‑Fi and cellular): long-press it
-on the dashboard, use the Wi‑Fi button on its request list, or open
+on the dashboard, use the Wi‑Fi button on its connection list, or open
 *Options ▸ Internet Access…* to manage the list and block any installed app
 by bundle identifier.
 
@@ -36,8 +92,9 @@ This is done with a Network Extension **content filter**. The
 `NetworkInspectorFilterData` extension sees every new socket flow along with
 its source app's signing identifier and drops the flows of blocked apps; the
 list reaches it through the filter's vendor configuration
-(`AppBlocklist` in the package holds the matching logic). iOS has no other
-public API for per-app network blocking.
+(`FilterSettings` and `AppBlocklist` in the package hold the encoding and
+matching logic). iOS has no other public API for per-app network blocking.
+The filter runs while any app is blocked or traffic capture is on.
 
 Apple restricts where third-party content filters run:
 
@@ -90,8 +147,8 @@ local Swift Package dependency.
 
 ```
 NetworkInspector/            App target sources (SwiftUI views, app entry point, assets)
-NetworkInspectorFilterData/  Content filter data provider extension (drops blocked apps' flows)
-NetworkInspectorFilterControl/ Content filter control provider extension (required, no-op)
+NetworkInspectorFilterData/  Content filter data provider extension (drops blocked apps' flows, reports flows while capturing)
+NetworkInspectorFilterControl/ Content filter control provider extension (writes reported flows to the shared journal)
 NetworkInspectorKit/         Swift Package with all logic + Swift Testing suite
 project.yml                  XcodeGen spec that wires the app target to the local package
 .github/workflows/ci.yml     CI: generates the project, builds for a simulator, runs Kit tests
@@ -101,9 +158,10 @@ project.yml                  XcodeGen spec that wires the app target to the loca
 
 A free Apple ID is enough to run the app on your own device. Builds signed this
 way expire after 7 days and must be re-installed from Xcode. Turning off an
-app's internet access needs a paid team (see above). With a free team,
-generate from `project.personal.yml` instead, which leaves out the two filter
-extensions and the app's entitlements (step 3). Otherwise signing fails with
+app's internet access and seeing real traffic by app both need a paid team
+(see above). With a free team, generate from `project.personal.yml` instead,
+which leaves out the two filter extensions and the app's entitlements
+(step 3); the app then only shows demo traffic. Otherwise signing fails with
 "Personal development teams … do not support the Network Extensions
 capability".
 
@@ -195,3 +253,43 @@ can't run content filters; there the Internet Access sheet should show
    `AppBlocklist.blocks(sourceAppIdentifier:)` doesn't match. Log
    `flow.sourceAppIdentifier` in `FilterDataProvider.handleNewFlow` and view
    the output in Console.app, filtered to the filter extension's process.
+
+### Traffic capture (real apps by name)
+
+Same setup as above: a paid team and a physical iPhone. Signing must also
+succeed for the **App Groups** capability on `NetworkInspector` and
+`NetworkInspectorFilterControl` (automatic signing registers
+`group.com.omarkar.networkinspector`; if it can't, add the group in the
+developer portal and enable it for both App IDs). In the simulator, **Start
+Capturing** should end in "Capture Unavailable" with a **Show Demo Traffic**
+button. In a free Apple ID build (`project.personal.yml`) it should say the
+build doesn't include the content filter, without any permission prompt.
+
+1. Launch the app. The dashboard should say "See Which Apps Use the Network"
+   with a **Start Capturing** button, and no made-up apps (Courier, Frame…).
+2. Tap **Start Capturing** and allow the prompt. The toolbar should read
+   "Live" and the dashboard "Waiting for Traffic".
+3. Open WhatsApp (or any app), use it for a few seconds, and come back.
+   "WhatsApp" should be listed by name; its real icon should replace the
+   glyph within a few seconds (App Store lookup). Other apps and iOS services
+   (e.g. "Push Notifications", "DNS") may show up too.
+4. Tap WhatsApp: its connections should list hosts such as
+   `g.whatsapp.net:443` or `*.whatsapp.net`, marked Open or Closed. Closed
+   ones show ↓/↑ bytes. Force-quit WhatsApp to close its connections and
+   check that the Data sort then shows its bytes.
+5. Open the **Connections** tab: every app's connections, newest first.
+   Search for a hostname or app name, and filter by Open/Closed/Blocked.
+6. Block an app (long-press ▸ Turn Internet Off), then use it: its new
+   connections should appear as **Blocked**.
+7. Leave the app, use other apps for a minute, return: their traffic from
+   that time should be listed.
+8. *Options ▸ Stop Capturing*: the toolbar should read "Not Capturing". With
+   no apps blocked, the filter should turn off (Settings ▸ General ▸ VPN &
+   Device Management).
+9. *Options ▸ Show Demo Traffic* switches to the simulated apps and a
+   **Requests** tab; *Show Device Traffic* switches back.
+10. If apps never show up while "Live", find where the chain breaks with
+    logs viewed in Console.app: in `FilterControlProvider.handle(_:)`, log
+    `report.flow?.sourceAppIdentifier` (do reports arrive?) and whether
+    `journal` is nil (is the app group available?), and log the error that
+    `FlowJournalWriter.append` swallows (can it write?).

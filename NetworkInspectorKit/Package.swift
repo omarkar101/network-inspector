@@ -4,7 +4,9 @@ import PackageDescription
 let package = Package(
     name: "NetworkInspectorKit",
     platforms: [
-        .iOS(.v18)
+        .iOS(.v18),
+        // Only so `swift test` on a Mac can use the same Foundation APIs.
+        .macOS(.v14)
     ],
     products: [
         .library(

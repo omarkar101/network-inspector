@@ -19,9 +19,14 @@ struct RootView: View {
             Tab("Apps", systemImage: "square.stack.3d.up.fill") {
                 AppStatsDashboardView(model: model, internetAccess: internetAccess)
             }
-            Tab("Requests", systemImage: "list.bullet.rectangle.portrait") {
+            Tab(model.source == .device ? "Connections" : "Requests", systemImage: "list.bullet.rectangle.portrait") {
                 NavigationStack {
-                    RequestListView(title: "Requests", entries: model.entries, showsApp: true)
+                    switch model.source {
+                    case .device:
+                        ConnectionListView(title: "Connections", connections: model.connections, showsApp: true)
+                    case .demo:
+                        RequestListView(title: "Requests", entries: model.requests, showsApp: true)
+                    }
                 }
             }
         }

@@ -1,16 +1,27 @@
+import Foundation
+
 /// The app on the device that issued a captured request.
 public struct SourceApp: Sendable, Hashable, Identifiable {
     public let bundleIdentifier: String
     public let displayName: String
     /// An SF Symbol name used as the app's glyph in lists.
     public let symbolName: String
+    /// The app's real icon, from its App Store listing. Shown instead of the
+    /// glyph when set.
+    public let iconURL: URL?
 
     public var id: String { bundleIdentifier }
 
-    public init(bundleIdentifier: String, displayName: String, symbolName: String = "app.fill") {
+    public init(
+        bundleIdentifier: String,
+        displayName: String,
+        symbolName: String = "app.fill",
+        iconURL: URL? = nil
+    ) {
         self.bundleIdentifier = bundleIdentifier
         self.displayName = displayName
         self.symbolName = symbolName
+        self.iconURL = iconURL
     }
 
     /// Placeholder for traffic that could not be attributed to an app.
